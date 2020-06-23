@@ -1,6 +1,6 @@
 # Marine Obstacle Detection Benchmark
 
-
+___
 ### Evaluation Scripts
 
 #### Default evaluation parameters:
@@ -12,9 +12,13 @@ Minimal area threshold for detection: 5^2 pixels
 #### -> get_evaluation_statistics.py
 
 
+___
 ### Visualization Scripts
 
+
 #### -> visualize.py
+
+___
 
 ### References
 [1] Bovcon et. al, Stereo Obstacle Detection for Unmanned Surface Vehicles by IMU-assisted Semantic Segmentation, RAS 2018
