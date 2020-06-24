@@ -6,7 +6,11 @@ import matplotlib.pyplot as plt
 
 
 # Function performs obstacle detection evaluation and return a list of TP, FP and FN detections with their BBoxes
-def detect_obstacles_modb(gt, obstacle_mask, gt_mask, horizon_mask, eval_params):
+def detect_obstacles_modb(gt, obstacle_mask, gt_mask, horizon_mask, eval_params, danger_zone=None):
+
+    # Filter GT obstacle annotations - keep only those that are inside the danger zone mask
+    if danger_zone is not None:
+        gt = filter_gt_danger_zone(gt, danger_zone, eval_params)
 
     # Filter the obstacles mask and extract obstacles from it
     _, obstacle_mask = filter_obstacle_mask(obstacle_mask, eval_params)
@@ -181,6 +185,47 @@ def check_fp_detections(gt, obstacle_mask_filtered, gt_mask_filtered, horizon_ma
                                 })
 
     return fp_list
+
+
+# Filter GT based on danger zone mask
+def filter_gt_danger_zone(gt, danger_zone_mask, eval_params):
+    new_gt_list = []
+    num_obs = len(gt['obstacles'])
+    print(num_obs)
+    for i in range(num_obs):
+        tmp_obs_bb = gt['obstacles'][i]['bbox']
+        tmp_obs_mask = np.zeros((danger_zone_mask.shape[0], danger_zone_mask.shape[1]), dtype=np.uint8)
+        tmp_obs_mask[tmp_obs_bb[1]:tmp_obs_bb[3], tmp_obs_bb[0]:tmp_obs_bb[2]] = 1
+        tmp_obs_mask = (np.logical_and(tmp_obs_mask, danger_zone_mask)).astype(np.uint8)
+
+        #plt.figure(1)
+        #plt.imshow(tmp_obs_mask + danger_zone_mask)
+        #plt.show()
+
+        if np.sum(tmp_obs_mask) is not 0:
+            tmp_labels = measure.label(tmp_obs_mask)
+            tmp_region_list = measure.regionprops(tmp_labels)
+
+            if len(tmp_region_list) > 0 and tmp_region_list[0].area >= eval_params['area_threshold']:
+                tmp_obs = gt['obstacles'][i]
+
+                tmp_obs_bb_new = np.zeros(4, dtype=int)
+                tmp_obs_bb_new[0] = tmp_region_list[0].bbox[1]
+                tmp_obs_bb_new[1] = tmp_region_list[0].bbox[0]
+                tmp_obs_bb_new[2] = tmp_region_list[0].bbox[3]
+                tmp_obs_bb_new[3] = tmp_region_list[0].bbox[2]
+
+                tmp_obs['bbox'] = tmp_obs_bb_new
+                tmp_obs['area'] = tmp_region_list[0].area
+                new_gt_list.append(tmp_obs)
+
+    # BLABLA DEBUG
+    if len(gt['obstacles']) != len(new_gt_list):
+        print('Ni enako')
+
+    gt['obstacles'] = new_gt_list
+
+    return gt
 
 
 # Remove annotations way above the horizon. This detections should not count towards FPs as they do not affect the

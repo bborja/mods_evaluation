@@ -3,9 +3,10 @@ import argparse
 import os
 import sys
 import cv2
+import matplotlib.pyplot as plt
 from datetime import datetime
 from utils import generate_water_mask, generate_obstacle_mask, write_json_file, read_gt_file, resize_image, \
-                  code_mask_to_labels, build_sequences_list
+                  code_mask_to_labels, build_sequences_list, poly2mask
 from detect_wateredge import evaluate_water_edge
 from detect_obstacles import detect_obstacles_modb
 
@@ -93,7 +94,7 @@ def run_evaluation():
                          }
 
     # Quick statistics
-    total_detections = np.zeros((3, 1), np.int)  # TP, FP, FN
+    total_detections = np.zeros((6, 1), np.int)  # TP, FP, FN, TP_D, FP_D, FN_D
     total_edge_aprox = np.zeros((3, 1), np.float)  # RMSE_t, RMSE_o, RMSE_u
 
     # Loop through sequences
@@ -115,12 +116,13 @@ def run_evaluation():
             hor_name = gt['sequence'][frame_number]['horizon_file_name']
 
             # Perform evaluation on current image
-            rmse_t, rmse_o, rmse_u, ou_mask, tp_list, fp_list, fn_list = run_evaluation_image(args.data_path,
-                                                                                              args.segmentation_path,
-                                                                                              args.segmentation_colors,
-                                                                                              args.method_name,
-                                                                                              gt, seq_id,
-                                                                                              frame_number, eval_params)
+            rmse_t, rmse_o, rmse_u, ou_mask, tp_list, fp_list, fn_list, \
+            tp_list_d, fp_list_d, fn_list_d,  = run_evaluation_image(args.data_path,
+                                                                     args.segmentation_path,
+                                                                     args.segmentation_colors,
+                                                                     args.method_name,
+                                                                     gt, seq_id,
+                                                                     frame_number, eval_params)
 
             # Add to the evaluation results
 
@@ -130,6 +132,9 @@ def run_evaluation():
                                                                           "obstacles": {"tp_list": tp_list,
                                                                                         "fp_list": fp_list,
                                                                                         "fn_list": fn_list},
+                                                                          "obstacles_danger": {"tp_list": tp_list_d,
+                                                                                               "fp_list": fp_list_d,
+                                                                                               "fn_list": fn_list_d},
                                                                           "img_name": img_name,
                                                                           "hor_name": hor_name
                                                                          })
@@ -138,6 +143,9 @@ def run_evaluation():
             total_detections[0] += len(tp_list)
             total_detections[1] += len(fp_list)
             total_detections[2] += len(fn_list)
+            total_detections[3] += len(tp_list_d)
+            total_detections[4] += len(fp_list_d)
+            total_detections[5] += len(fn_list_d)
 
             total_edge_aprox = np.column_stack((total_edge_aprox, [rmse_t, rmse_o, rmse_u]))
 
@@ -152,9 +160,9 @@ def run_evaluation():
                                                                             np.mean(total_edge_aprox[2, :])) * 100))
     print('RMSE under: %.01f percent' % (np.mean(total_edge_aprox[2, :]) / (np.mean(total_edge_aprox[1, :]) +
                                                                             np.mean(total_edge_aprox[2, :])) * 100))
-    print('Total TP:   %d' % total_detections[0])
-    print('Total FP:   %d' % total_detections[1])
-    print('Total FN:   %d' % total_detections[2])
+    print('Total TP:   %d  (%d)' % (total_detections[0], total_detections[3]))
+    print('Total FP:   %d  (%d)' % (total_detections[1], total_detections[4]))
+    print('Total FN:   %d  (%d)' % (total_detections[2], total_detections[5]))
     print('Total F1:   %.01f percent' % (((2 * total_detections[0]) / (2 * total_detections[0] + total_detections[1] +
                                                                        total_detections[2])) * 100))
     print('***********************')
@@ -184,6 +192,13 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
     print(os.path.join(segmentation_path, 'seq%02d' % seq_id, method_name, "%s.png" % img_name_split[0]))
     seg = cv2.imread(os.path.join(segmentation_path, 'seq%02d' % seq_id, method_name, "%s.png" % img_name_split[0]))
 
+    # Read danger zone
+    danger_zone_x = gt['sequence'][frame_number]['danger_zone']['x-axis']
+    danger_zone_y = gt['sequence'][frame_number]['danger_zone']['y-axis']
+    # Build danger zone mask
+    danger_zone_mask = poly2mask(danger_zone_y, danger_zone_x, (img.shape[0], img.shape[1]))
+
+
     # Code mask to labels
     seg = code_mask_to_labels(seg, seg_colors)
     # Resize segmentation mask to match the image
@@ -195,17 +210,43 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
     # Generate water mask
     water_mask = generate_water_mask(seg)
 
+    # Modify obstacle mask according to the danger-zone
+    obstacle_mask_danger = (np.logical_and(obstacle_mask, danger_zone_mask)).astype(np.uint8)
+    water_mask_danger = (np.logical_and(water_mask, danger_zone_mask)).astype(np.uint8)
+
     # Perform the evaluation of the water-edge
-    rmse_t, rmse_o, rmse_u, ou_mask, land_mask = evaluate_water_edge(gt['sequence'][frame_number], water_mask, eval_params)
+    rmse_t, rmse_o, rmse_u, ou_mask, land_mask = evaluate_water_edge(gt['sequence'][frame_number], water_mask,
+                                                                     eval_params)
 
     # Calculate GT mask (This is land mask with an extension of the undershot regions)
     gt_mask = (np.logical_or(land_mask, ou_mask == 2)).astype(np.uint8)
+    gt_mask_danger = (np.logical_or(np.logical_not(danger_zone_mask), gt_mask)).astype(np.uint8)
+
+    plt.figure(1)
+    plt.subplot(221)
+    plt.imshow(obstacle_mask)
+    plt.subplot(222)
+    plt.imshow(obstacle_mask_danger)
+    plt.subplot(223)
+    plt.imshow(gt_mask)
+    plt.subplot(224)
+    plt.imshow(gt_mask_danger)
 
     # Perform the evaluation of the obstacle detection
     tp_list, fp_list, fn_list = detect_obstacles_modb(gt['sequence'][frame_number], obstacle_mask, gt_mask,
                                                       horizon_mask, eval_params)
 
-    return rmse_t, rmse_o, rmse_u, ou_mask, tp_list, fp_list, fn_list
+    # Perform the evaluation of the obstacle detection inside the danger zone only
+    tp_list_d, fp_list_d, fn_list_d = detect_obstacles_modb(gt['sequence'][frame_number], obstacle_mask_danger,
+                                                            gt_mask_danger, horizon_mask, eval_params,
+                                                            danger_zone=danger_zone_mask)
+
+    print('%d - %d' % (len(tp_list), len(tp_list_d)))
+    print('%d - %d' % (len(fp_list), len(fp_list_d)))
+    print('%d - %d' % (len(fn_list), len(fn_list_d)))
+    plt.show()
+
+    return rmse_t, rmse_o, rmse_u, ou_mask, tp_list, fp_list, fn_list, tp_list_d, fp_list_d, fn_list_d
 
 
 if __name__ == '__main__':

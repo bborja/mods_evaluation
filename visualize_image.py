@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import cv2
@@ -9,38 +10,71 @@ def visualize_single_image(img, segm_mask, results_detection, gt, original_segm_
     added_image = cv2.addWeighted(img, 0.7, segm_mask, 0.3, 0.2)
     # For video frame generating
     if original_segm_mask is not None:
+        # Read QR code
+        img_qr = cv2.resize(((cv2.imread('images/qr-code_2.png')) > 180).astype(np.uint8), (200, 200))
+        print(img_qr.shape)
         img_scalled = cv2.resize(img, (426, 320))
         msk_scalled = cv2.resize(original_segm_mask, (426, 320), interpolation=cv2.INTER_NEAREST)
         kernel = np.ones((11, 11), np.float32) / 121
+        # image
         added_image[0:320, 0:426, :] = img_scalled
+        # segmentation mask
         added_image[0:320, 426:426+426, :] = msk_scalled
+        # information
         added_image[0:320, -426:-1, :] = (0.8 *
                                           cv2.filter2D(added_image[0:320, -426:-1, :], -1, kernel)).astype(np.uint8)
+        added_image[110:310, -210:-10, :] *= img_qr
+        # black separating line
+        added_image[320:322, :] = 0
 
-    plt.figure(1)
+    #mpl.rcParams['text.color'] = 'white'
+    dpi = mpl.rcParams['figure.dpi']
+    height, width, depth = img.shape
+
+    # What size does the figure need to be in inches to fit the image?
+    figsize = width / float(dpi), height / float(dpi)
+
+    # Create a figure of the right size with one axes that takes up the full figure
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_axes([0, 0, 1, 1])
+
+    # Hide spines, ticks, etc.
+    ax.axis('off')
+
     # Plot image
-    plt.imshow(added_image)
-    plt.axis('equal')
+    ax.imshow(added_image)
+
+    # Plot danger zone
+    print(gt['danger_zone']['x-axis'])
+    print(gt['danger_zone']['y-axis'])
+    ax.plot(gt['danger_zone']['x-axis'], gt['danger_zone']['y-axis'], marker='', color='orange', linewidth=1,
+            linestyle='dashed')
+
     # Plot water-edge danger lines
     num_danger_lines = len(gt['water-edges'])
     for i in range(num_danger_lines):
         tmp_danger_line_x = gt['water-edges'][i]['x-axis']
         tmp_danger_line_y = gt['water-edges'][i]['y-axis']
-        plt.plot(tmp_danger_line_x, tmp_danger_line_y, marker='', color='black', linewidth=2, linestyle='solid')
-        plt.plot(tmp_danger_line_x, tmp_danger_line_y, marker='', color='pink', linewidth=1, linestyle='dashed')
+        ax.plot(tmp_danger_line_x, tmp_danger_line_y, marker='', color='black', linewidth=3, linestyle='solid')
+        ax.plot(tmp_danger_line_x, tmp_danger_line_y, marker='', color='pink', linewidth=1, linestyle='dashed')
+        ax.text(tmp_danger_line_x[0], tmp_danger_line_y[0] - 2, 'water-edge-%d' % i, fontsize=6)
     # Plot detection rectangles
-    ax = plt.gca()
-    # Plot TPs
-    ax = plot_detection_rectangles(results_detection, 'tp_list', ax)
-    ax = plot_detection_rectangles(results_detection, 'fp_list', ax)
-    ax = plot_detection_rectangles(results_detection, 'fn_list', ax)
+
+    #ax = plt.gca()
+    ax = plot_detection_rectangles(results_detection, 'tp_list', ax)  # Plot TPs
+    ax = plot_detection_rectangles(results_detection, 'fp_list', ax)  # Plot FPs
+    ax = plot_detection_rectangles(results_detection, 'fn_list', ax)  # Plot FNs
+
+    ax = plot_detection_rectangles(results_detection, 'tp_list', ax, True)  # Plot TPs in danger zone
+    ax = plot_detection_rectangles(results_detection, 'fp_list', ax, True)  # Plot FPs in danger zone
+    ax = plot_detection_rectangles(results_detection, 'fn_list', ax, True)  # Plot FNs in danger zone
 
     if original_segm_mask is None:
         plt.show()
 
 
 # Plot detection rectangles
-def plot_detection_rectangles(results_detection, list_name, ax):
+def plot_detection_rectangles(results_detection, list_name, ax, in_danger_zone=False):
     if list_name == 'tp_list':
         edge_color = 'green'
     elif list_name == 'fn_list':
@@ -48,15 +82,29 @@ def plot_detection_rectangles(results_detection, list_name, ax):
     else:
         edge_color = 'yellow'
 
-    num_dets = len(results_detection['obstacles'][list_name])
+    if in_danger_zone:
+        detection_type = 'obstacles_danger'
+    else:
+        detection_type = 'obstacles'
+
+    num_dets = len(results_detection[detection_type][list_name])
     for i in range(num_dets):
-        tmp_bbox = results_detection['obstacles'][list_name][i]['bbox']
-        rect_bg = patches.Rectangle((tmp_bbox[0], tmp_bbox[1]), tmp_bbox[2]-tmp_bbox[0], tmp_bbox[3]-tmp_bbox[1],
-                                    linewidth=2, edgecolor='black', facecolor='none')
-        rect_fg = patches.Rectangle((tmp_bbox[0], tmp_bbox[1]), tmp_bbox[2]-tmp_bbox[0], tmp_bbox[3]-tmp_bbox[1],
-                                    linewidth=1, edgecolor=edge_color, facecolor='none')
-        ax.add_patch(rect_bg)
-        ax.add_patch(rect_fg)
+        tmp_bbox = results_detection[detection_type][list_name][i]['bbox']
+        if in_danger_zone:
+            rect_fg = patches.Rectangle((tmp_bbox[0], tmp_bbox[1]), tmp_bbox[2]-tmp_bbox[0], tmp_bbox[3]-tmp_bbox[1],
+                                        linewidth=2, edgecolor=edge_color, facecolor='none', linestyle=':')
+            ax.add_patch(rect_fg)
+        else:
+            rect_bg = patches.Rectangle((tmp_bbox[0], tmp_bbox[1]), tmp_bbox[2]-tmp_bbox[0], tmp_bbox[3]-tmp_bbox[1],
+                                        linewidth=2, edgecolor='black', facecolor='none')
+            rect_fg = patches.Rectangle((tmp_bbox[0], tmp_bbox[1]), tmp_bbox[2]-tmp_bbox[0], tmp_bbox[3]-tmp_bbox[1],
+                                        linewidth=1, edgecolor='black', facecolor=edge_color, alpha=0.35)
+            if edge_color is not 'yellow':
+                ax.text(tmp_bbox[0], tmp_bbox[1], results_detection[detection_type][list_name][i]['type'], fontsize=6)
+            else:
+                ax.text(tmp_bbox[0], tmp_bbox[1], 'FP', fontsize=6)
+            #ax.add_patch(rect_bg)
+            ax.add_patch(rect_fg)
 
         if edge_color == 'yellow':
             print(tmp_bbox)
@@ -73,18 +121,25 @@ def visualize_image_for_video(img, segm_mask, segm_mask_overlay, results_detecti
     rmse_o = results_detection['rmse_o']
     rmse_u = results_detection['rmse_u']
     num_tps = len(results_detection['obstacles']['tp_list'])
+    num_tps_d = len(results_detection['obstacles_danger']['tp_list'])
     num_fps = len(results_detection['obstacles']['fp_list'])
+    num_fps_d = len(results_detection['obstacles_danger']['fp_list'])
     num_fns = len(results_detection['obstacles']['fn_list'])
+    num_fns_d = len(results_detection['obstacles_danger']['fn_list'])
     f1_score = ((2 * num_tps) / (2 * num_tps + num_fps + num_fns)) * 100
 
     # Overlay text statistics...
-    plt.text(120, 50, "Input image", fontsize=8)
-    plt.text(490, 50, "Segmentation mask", fontsize=8)
-    plt.text(880, 50, "RMSE: %d px" % rmse_t, fontsize=8)
-    plt.text(880, 90, "RMSE over: %.01f" % rmse_o, fontsize=8)
-    plt.text(880, 130, "RMSE under: %.01f" % rmse_u, fontsize=8)
-    plt.text(880, 170, "TP: %d" % num_tps, fontsize=8)
-    plt.text(880, 210, "FP: %d" % num_fps, fontsize=8)
-    plt.text(880, 250, "FN: %d" % num_fns, fontsize=8)
-    plt.text(880, 290, "F1: %.01f" % f1_score, fontsize=8)
+    plt.text(150, 50, "Input image", fontsize=12)
+    plt.text(560, 50, "Segmentation mask", fontsize=12)
+    plt.text(880, 50, "RMSE: %d px (above: %.01f%%, under: %.01f%%)" % (rmse_t, rmse_o / (rmse_o + rmse_u) * 100,
+                                                                        rmse_u / (rmse_o + rmse_u) * 100), fontsize=12)
+    plt.text(880, 90,  "TPs: %d" % num_tps, fontsize=12)
+    plt.text(890, 110, "in danger zone: %d" % num_tps_d, fontsize=12)
+    plt.text(880, 150, "FPs: %d" % num_fps, fontsize=12)
+    plt.text(890, 170, "in danger zone: %d" % num_fps_d, fontsize=12)
+    plt.text(880, 210, "FNs: %d" % num_fns, fontsize=12)
+    plt.text(890, 230, "in danger zone: %d" % num_fns_d, fontsize=12)
+    plt.text(880, 290, "F1: %.01f%%" % f1_score, fontsize=15)
+
+    plt.text(1100, 110, "MODB Dataset", fontsize=12)
     plt.show()
