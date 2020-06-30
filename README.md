@@ -1,25 +1,99 @@
 # Marine Obstacle Detection Benchmark
+[1] Bovcon Borja and Muhovič Jon et. al, .... arXiv: <a href="https://arxiv.org">...</a><br>
+
+Updates:<br>
+* [July 2020] Released <i>Marine Obstacle Detection Benchmark</i> evaluation scripts
+
+
+## 1. Installation
+### Requirements
+To successfully run the provided benchmark scripts you will need the following packages:
+* <a href="https://www.python.org/">Python</a> >= 3.6
+* <a href="https://opencv.org/">OpenCV</a> >= 3.4
+* <a href="https://ffmpeg.org/">FFMPEG</a>
+* <a href="https://matplotlib.org/">MatPlotLib</a>
+* <a href="https://numpy.org/">Numpy</a>
+* <a href="https://scikit-image.org/">SciKit-Image</a>
+
+Execute the following sequence of commands to download and install required packages and libraries (Ubuntu):
+```
+$ sudo apt-get update
+$ sudo apt-get install python3.6
+$ sudo apt-get install python-opencv
+$ sudo apt-get install ffmpeg
+$ pip install -r requirements.txt
+```
+
+## 2. Evaluation Scripts
+Deep segmentation approaches determine to which of the three semantic components (water, sky, obstacles) a certain pixel in the image belongs to. From the segmented image a navigable surface is extracted and an obstacle map estimated. To evaluate the accuracy of the estimated navigable surface and the corresponding obstacle map, Bovcon et. al, [3] proposed performance evaluation measures that reflect two distinct challenges which USVs face: (i) <i>the water-edge detection</i> and (ii) <i>the obstacle detection</i>.
+
+The water-edge detection is measured as a root-mean-square-error (RMSE) of the water-edge position and it is used to determine regions safe to navigate. However, the water-edge in [3] includes the water/sky boundary, which does not present an actual danger to the USV. Consequently, the overall measure does not appropriately reflect the estimation error in important regions. Therefore, we modify it in such way that the water-edge error is only computed for the water/obstacles and water/land boundaries, while ignored for the water/sky boundary.
+
+The obstacle detection task measures the efficiency of detecting obstacles that do not protrude through the water-edge by computing a bounding-box overlap with ground truth annotations following PASCAL-VOC recommendations. However, this measure addresses merely smaller obstacles (such as buoys and swimmers) and does not consider large obstacles (such as boats). Furthermore, co-jointly detected obstacles will trigger false FN detections due to an insufficient bounding-box overlap, even though the obstacles were correctly detected. Therefore, we propose a new measure for the obstacle detection task. The amount of TP and FN detections is obtained by counting the number of correctly labelled pixels within the area of a ground truth obstacle annotation. An area, sufficiently covered with an obstacle label, is considered a TP detection. Alternatively, blobs of pixels labelled as obstacles that do not have sufficient overlap with ground truth annotations represent FP detections.
+
+### Danger zone
+The danger that obstacles pose to the USV depends on their distance. For example, obstacles located in close proximity are more hazardous than distant ones. To address this, [3] proposed a danger-zone defined as a radial area, centered at the location of USV. The radius is chosen in such way, that the farthest point of the area is reachable within ten seconds when travelling continuously with an average speed of 1.5m/s. We thus report the obstacle detection metrics on a whole image as well as only within the danger zone.
+
+### Default evaluation parameters:
+* Minimal overlap between two bounding-boxes: <b>15%</b><br>
+* Minimal area threshold for detection: <b>25</b> pixels
+
+All ground-truth obstacles and detections with surface area below the given threshold (<i>default 25px</i>) are discarded and not considered in the evaluation procedure.
+
+The computation of the overlap between two bounding-boxes is used for counting false-positive (FP) detections. Lets denote bounding-box area of a detection with <img src="https://latex.codecogs.com/gif.latex?D_i" alt="D_i"> and bounding-box area of a ground-truth with <img src="https://latex.codecogs.com/gif.latex?G_j" alt="G_j">. The overlap between the two bounding-boxes is computed as<br>
+
+<img src="https://latex.codecogs.com/gif.latex?%5Cfrac%7BD_i%20%5Ccap%20G_j%7D%7BD_i%20%5Ccup%20G_j%7D%20%5Ccdot%20100" alt="overlap_equation">
+
+If the overlap is greater than zero but does not exceed the prescribed threshold (<i>default 15%</i>), then the detection <img src="https://latex.codecogs.com/gif.latex?D_i" alt="D_i"> is considered a false-positive detection.
+
+### &rarr; modb_evaluation.py
+This script is used to evaluate the performance of a certain segmentation method on MODB. The script will process all the images and save the results to JSON file in the following format:
+#### Input Arguments
+* `data-path` - <i>an absolute path to the root folder where MODB sequences are stored</i>
+* `segmentation-path` - <i>an absolute path to the folder where segmentation masks are stored</i>
+* `output-path` - <i>an absolute path to where the results and statistics of the evaluation will be stored</i>
+* `method-name` - <i>method name; this should be equal to the folder name in which the segmentation masks are located</i>
+* `sequences` - <i>a list of sequences on which the evaluation procedure is performed (empty or zero = all)</i>
+* `segmentation-colors` - <i>a 2D of segmentation colors corresponding to the three semantic labels, written in RGB format</i>
+* `min-overlap` - <i>minimal overlap between two bounding boxes</i>
+* `area-threshold` - <i>minimal surface area of detections/obstacles to be considered in evaluation</i>
+
+
+#### Description and Examples
+```
+$ python visualize.py --data-path ./MODB --segmentation-path ./DeepLab3_segmentations --method-name DeepLabV3_plus
+```
+
+### &rarr; get_evaluation_statistics.py
+This script parses the results stored in JSON file and generates pretty graphs and plots.
+
+#### Input Arguments
+* `results-path` - <i>an absolute path to the folder where the evaluation results are stored</i>
+* `method-name` - <i>name of the method to be analysed</i>
+
+#### Description and Examples
+
+## 3. Visualization Scripts
+
+
+### &rarr; visualize.py
+This script visualizes the performance of the evaluated segmentation method and generates videos for each sequence.
+
+#### Input Arguments
+* `data-path` - <i>an absolute path to the folder where MODB sequences are stored</i>
+* `segmentation-path` - <i>an absolute path to the output folder where segmentation masks are stored</i>
+* `output-path` - <i>an absolute path to where the rendered videos will be stored</i>
+* `method-name` - <i>method name; this should be equal to the folder name in which the segmentation masks are located</i>
+* `sequences` - <i>list of sequences for which the videos will be rendered</i>
+* `frame` - <i>a number of a specific frame on which we want to visualize the performance</i>
+* `segmentation-colors` - <i>a 2D array of segmentation mask colors corresponding to the three semantic labels, written in RGB format</i>
+* `export-video` - <i>a boolean switch for exporting a video of sequence/s</i>
+
+#### Description and Examples
 
 ___
-### Evaluation Scripts
 
-#### Default evaluation parameters:
-Minimal overlap between two bounding-boxes: 15%<br>
-Minimal area threshold for detection: 5^2 pixels
-
-#### -> modb_evaluation.py
-
-#### -> get_evaluation_statistics.py
-
-
-___
-### Visualization Scripts
-
-
-#### -> visualize.py
-
-___
-
-### References
-[1] Bovcon et. al, Stereo Obstacle Detection for Unmanned Surface Vehicles by IMU-assisted Semantic Segmentation, RAS 2018
-[2] Bovcon et. al, The MaSTr1325 Dataset for Training Deep USV Obstacle Detection Models, IROS 2019
+## 4. References
+[1] Bovcon and Muhovič et. al, ....<br>
+[2] Bovcon et. al, Stereo Obstacle Detection for Unmanned Surface Vehicles by IMU-assisted Semantic Segmentation, RAS 2018<br>
+[3] Bovcon et. al, The MaSTr1325 Dataset for Training Deep USV Obstacle Detection Models, IROS 2019
