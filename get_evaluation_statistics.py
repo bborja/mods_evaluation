@@ -6,7 +6,7 @@ import os
 
 # Boundaries of different size classes of obstacles
 OBSTACLE_SIZE_CLASSES = [5*5, 15*15, 30*30, 50*50, 100*100, 200*200]
-OBSTACLE_TYPE_CLASSES = ['person', 'boat', 'other']
+OBSTACLE_TYPE_CLASSES = ['swimmer', 'boat', 'other']
 
 RESULTS_PATH = './results'
 
@@ -84,7 +84,7 @@ def main():
     plt.subplots_adjust(bottom=0.05, left=0.05, right=0.95, top=0.95, wspace=0.3, hspace=0.5)
     x_axis = ['TP', 'FP', 'FN']
     maximum_number_of_detections = int(np.ceil(np.max(det_sizes) / 10.0)) * 10
-    for i in range(len(OBSTACLE_SIZE_CLASSES)+1):
+    for i in range(1, len(OBSTACLE_SIZE_CLASSES)+1):
         if i == 0:
             area_min = 0
             area_max = OBSTACLE_SIZE_CLASSES[i]
@@ -95,7 +95,7 @@ def main():
             area_min = OBSTACLE_SIZE_CLASSES[i-1]
             area_max = OBSTACLE_SIZE_CLASSES[i]
 
-        tmp_ax = plt.subplot(3, len(OBSTACLE_SIZE_CLASSES) + 1, i + 1)
+        tmp_ax = plt.subplot(3, len(OBSTACLE_SIZE_CLASSES), i)
         tmp_ax.bar(x_axis, det_sizes[i, :])
         if i == 0:
             tmp_ax.set_ylabel('Number of detections')

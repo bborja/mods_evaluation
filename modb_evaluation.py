@@ -176,8 +176,8 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
                          eval_params):
     """ Reading data... """
     # Read image
-    print(os.path.join(data_path, 'seq%02d' % seq_id, 'frames',
-                                  gt['sequence'][frame_number]['image_file_name']))
+    #print(os.path.join(data_path, 'seq%02d' % seq_id, 'frames',
+    #                              gt['sequence'][frame_number]['image_file_name']))
     img = cv2.imread(os.path.join(data_path, 'seq%02d' % seq_id, 'frames',
                                   gt['sequence'][frame_number]['image_file_name']))
     img_name_split = gt['sequence'][frame_number]['image_file_name'].split(".")
@@ -189,7 +189,7 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
 
     # Read segmentation mask
     # seg = cv2.imread(os.path.join(segmentation_path, 'seq%02d' % seq_id, method_name, 'mask_%03d.png' % frame_number))
-    print(os.path.join(segmentation_path, 'seq%02d' % seq_id, method_name, "%s.png" % img_name_split[0]))
+    #print(os.path.join(segmentation_path, 'seq%02d' % seq_id, method_name, "%s.png" % img_name_split[0]))
     seg = cv2.imread(os.path.join(segmentation_path, 'seq%02d' % seq_id, method_name, "%s.png" % img_name_split[0]))
 
     # Read danger zone
@@ -222,6 +222,7 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
     gt_mask = (np.logical_or(land_mask, ou_mask == 2)).astype(np.uint8)
     gt_mask_danger = (np.logical_or(np.logical_not(danger_zone_mask), gt_mask)).astype(np.uint8)
 
+    """
     plt.figure(1)
     plt.subplot(221)
     plt.imshow(obstacle_mask)
@@ -231,6 +232,7 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
     plt.imshow(gt_mask)
     plt.subplot(224)
     plt.imshow(gt_mask_danger)
+    """
 
     # Perform the evaluation of the obstacle detection
     tp_list, fp_list, fn_list = detect_obstacles_modb(gt['sequence'][frame_number], obstacle_mask, gt_mask,
@@ -241,9 +243,9 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
                                                             gt_mask_danger, horizon_mask, eval_params,
                                                             danger_zone=danger_zone_mask)
 
-    print('%d - %d' % (len(tp_list), len(tp_list_d)))
-    print('%d - %d' % (len(fp_list), len(fp_list_d)))
-    print('%d - %d' % (len(fn_list), len(fn_list_d)))
+    # print('%d - %d' % (len(tp_list), len(tp_list_d)))
+    # print('%d - %d' % (len(fp_list), len(fp_list_d)))
+    # print('%d - %d' % (len(fn_list), len(fn_list_d)))
     plt.show()
 
     return rmse_t, rmse_o, rmse_u, ou_mask, tp_list, fp_list, fn_list, tp_list_d, fp_list_d, fn_list_d
