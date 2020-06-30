@@ -1,9 +1,11 @@
 import os
 import cv2
 import json
+import shutil
 import argparse
+import subprocess
 import numpy as np
-import matplotlib.animation as animation
+import matplotlib.pyplot as plt
 from utils import read_gt_file, code_mask_to_labels, code_labels_to_colors, resize_image
 from visualize_image import visualize_single_image, visualize_image_for_video
 
@@ -72,6 +74,7 @@ def main():
             if not os.path.exists(os.path.join(args.output_path)):
                 os.mkdir(os.path.join(args.output_path))
             os.mkdir(os.path.join(args.output_path, args.method_name))
+            os.mkdir(os.path.join(args.output_path, args.method_name, 'tmp_frames'))
 
     if args.frame is not None and len(args.frame) == 1:
         if args.sequences is not None and len(args.sequences) == 1:
@@ -152,13 +155,34 @@ def main():
                     fig1 = visualize_image_for_video(img, seg, seg_ou, results['sequences'][seq_id-1]['frames'][fr_id],
                                                      gt['sequence'][fr_id])
 
-                    # Save plot to video
-                    #line_ani = animation.FuncAnimation(fig1, update_line, 25, fargs=(data, l),
-                    #                                   interval=50, blit=True)
-                    #line_ani.save('lines.mp4', writer=writer)
+                    if args.export_video:
+                        fig1.savefig(os.path.join(args.output_path, args.method_name, 'tmp_frames', '%08d.png' % fr_id))
+                    else:
+                        plt.show()
 
             else:
                 print('<Error>: Sequence %d was not evaluated' % seq_id)
+
+        if args.export_video:
+            # Export frames to video
+            cmd = ['ffmpeg', '-i', os.path.join(args.output_path, args.method_name, 'tmp_frames', '%08d.png'),
+                   os.path.join(args.output_path, args.method_name, 'sequence_%02d.mp4' % seq_id)]
+
+            ret_code = subprocess.call(cmd)
+            if not retcode == 0:
+                raise ValueError('Error {} executing command: {}'.format(ret_code, ' '.join(cmd)))
+
+            # Delete temporary image files used for generating video
+            tmp_folder = os.path.join(args.output_path, args.method_name, 'tmp_frames')
+            for filename in os.listdir(tmp_folder):
+                file_path = os.path.join(tmp_folder, filename)
+                try:
+                    if os.path.isfile(file_path) or os.path.islink(file_path):
+                        os.unlink(file_path)
+                    elif os.path.isdir(file_path):
+                        shutil.rmtree(file_path)
+                except Exception as e:
+                    print('Failed to delete %s. Reason: %s' % (file_path, e))
 
 
 if __name__ == "__main__":

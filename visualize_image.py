@@ -58,8 +58,8 @@ def visualize_single_image(img, segm_mask, results_detection, gt, original_segm_
         ax.plot(tmp_danger_line_x, tmp_danger_line_y, marker='', color='black', linewidth=3, linestyle='solid')
         ax.plot(tmp_danger_line_x, tmp_danger_line_y, marker='', color='pink', linewidth=1, linestyle='dashed')
         ax.text(tmp_danger_line_x[0], tmp_danger_line_y[0] - 2, 'water-edge-%d' % i, fontsize=6)
-    # Plot detection rectangles
 
+    # Plot detection rectangles
     #ax = plt.gca()
     ax = plot_detection_rectangles(results_detection, 'tp_list', ax)  # Plot TPs
     ax = plot_detection_rectangles(results_detection, 'fp_list', ax)  # Plot FPs
@@ -69,8 +69,10 @@ def visualize_single_image(img, segm_mask, results_detection, gt, original_segm_
     ax = plot_detection_rectangles(results_detection, 'fp_list', ax, True)  # Plot FPs in danger zone
     ax = plot_detection_rectangles(results_detection, 'fn_list', ax, True)  # Plot FNs in danger zone
 
-    if original_segm_mask is None:
-        plt.show()
+    # if original_segm_mask is None:
+    #     plt.show()
+
+    return fig
 
 
 # Plot detection rectangles
@@ -95,14 +97,16 @@ def plot_detection_rectangles(results_detection, list_name, ax, in_danger_zone=F
                                         linewidth=2, edgecolor=edge_color, facecolor='none', linestyle=':')
             ax.add_patch(rect_fg)
         else:
-            rect_bg = patches.Rectangle((tmp_bbox[0], tmp_bbox[1]), tmp_bbox[2]-tmp_bbox[0], tmp_bbox[3]-tmp_bbox[1],
-                                        linewidth=2, edgecolor='black', facecolor='none')
+            # rect_bg = patches.Rectangle((tmp_bbox[0], tmp_bbox[1]), tmp_bbox[2]-tmp_bbox[0], tmp_bbox[3]-tmp_bbox[1],
+            #                             linewidth=2, edgecolor='black', facecolor='none')
+
             rect_fg = patches.Rectangle((tmp_bbox[0], tmp_bbox[1]), tmp_bbox[2]-tmp_bbox[0], tmp_bbox[3]-tmp_bbox[1],
                                         linewidth=1, edgecolor='black', facecolor=edge_color, alpha=0.35)
             if edge_color is not 'yellow':
                 ax.text(tmp_bbox[0], tmp_bbox[1], results_detection[detection_type][list_name][i]['type'], fontsize=6)
             else:
                 ax.text(tmp_bbox[0], tmp_bbox[1], 'FP', fontsize=6)
+
             #ax.add_patch(rect_bg)
             ax.add_patch(rect_fg)
 
@@ -115,7 +119,8 @@ def plot_detection_rectangles(results_detection, list_name, ax, in_danger_zone=F
 # Visualize image for video
 def visualize_image_for_video(img, segm_mask, segm_mask_overlay, results_detection, gt):
     # Overlay segmentation mask over the actual image
-    visualize_single_image(img, segm_mask_overlay, results_detection, gt, segm_mask)
+    fig = visualize_single_image(img, segm_mask_overlay, results_detection, gt, segm_mask)
+    #fig.savefig('./results/bla.png')
 
     rmse_t = results_detection['rmse_t']
     rmse_o = results_detection['rmse_o']
@@ -128,18 +133,24 @@ def visualize_image_for_video(img, segm_mask, segm_mask_overlay, results_detecti
     num_fns_d = len(results_detection['obstacles_danger']['fn_list'])
     f1_score = ((2 * num_tps) / (2 * num_tps + num_fps + num_fns)) * 100
 
-    # Overlay text statistics...
-    plt.text(150, 50, "Input image", fontsize=12)
-    plt.text(560, 50, "Segmentation mask", fontsize=12)
-    plt.text(880, 50, "RMSE: %d px (above: %.01f%%, under: %.01f%%)" % (rmse_t, rmse_o / (rmse_o + rmse_u) * 100,
-                                                                        rmse_u / (rmse_o + rmse_u) * 100), fontsize=12)
-    plt.text(880, 90,  "TPs: %d" % num_tps, fontsize=12)
-    plt.text(890, 110, "in danger zone: %d" % num_tps_d, fontsize=12)
-    plt.text(880, 150, "FPs: %d" % num_fps, fontsize=12)
-    plt.text(890, 170, "in danger zone: %d" % num_fps_d, fontsize=12)
-    plt.text(880, 210, "FNs: %d" % num_fns, fontsize=12)
-    plt.text(890, 230, "in danger zone: %d" % num_fns_d, fontsize=12)
-    plt.text(880, 290, "F1: %.01f%%" % f1_score, fontsize=15)
+    ax = fig.add_axes([0, 0, 1, 1])
 
-    plt.text(1100, 110, "MODB Dataset", fontsize=12)
-    plt.show()
+    # Overlay text statistics...
+    ax.text(150, 50, "Input image", fontsize=12)
+    ax.text(560, 50, "Segmentation mask", fontsize=12)
+    ax.text(880, 50, "RMSE: %d px (above: %.01f%%, under: %.01f%%)" % (rmse_t, rmse_o / (rmse_o + rmse_u) * 100,
+                                                                        rmse_u / (rmse_o + rmse_u) * 100), fontsize=12)
+    ax.text(880, 90,  "TPs: %d" % num_tps, fontsize=12)
+    ax.text(890, 110, "in danger zone: %d" % num_tps_d, fontsize=12)
+    ax.text(880, 150, "FPs: %d" % num_fps, fontsize=12)
+    ax.text(890, 170, "in danger zone: %d" % num_fps_d, fontsize=12)
+    ax.text(880, 210, "FNs: %d" % num_fns, fontsize=12)
+    ax.text(890, 230, "in danger zone: %d" % num_fns_d, fontsize=12)
+    ax.text(880, 290, "F1: %.01f%%" % f1_score, fontsize=15)
+
+    ax.text(1100, 110, "MODB Dataset", fontsize=12)
+
+    # fig.savefig('./results/bla.png')
+    # plt.show()
+
+    return fig
