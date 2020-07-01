@@ -1,5 +1,6 @@
 import os
 import cv2
+import sys
 import json
 import shutil
 import argparse
@@ -64,11 +65,6 @@ def main():
     with open(os.path.join(args.results_path, 'results_%s.json' % args.method_name)) as f:
         results = json.load(f)
 
-    print(results)
-    print(len(results['sequences']))
-    print(results['sequences'][0]['evaluated'])
-    print(results['sequences'][1]['evaluated'])
-
     if args.export_video:
         if not os.path.exists(os.path.join(args.output_path, args.method_name)):
             if not os.path.exists(os.path.join(args.output_path)):
@@ -111,19 +107,19 @@ def main():
         if args.sequences is None:
             args.sequences = np.arange(len(results['sequences']))
 
-        # Set up formatting for the movie files
-        #Writer = animation.writers['ffmpeg']
-        #writer = Writer(fps=30, metadata=dict(artist='Borja Bovcon, Jon Muhovic, Janez Pers, Matej Kristan'), bitrate=1800)
-
         for seq_id in args.sequences:
             if results['sequences'][seq_id - 1]['evaluated']:
                 num_frames_in_sequence = len(results['sequences'][seq_id - 1]['frames'])
-                print(num_frames_in_sequence)
 
                 # Load ground truth of sequence
                 gt = read_gt_file(os.path.join(args.data_path, 'seq%02d' % seq_id, 'annotations.json'))
 
                 for fr_id in range(num_frames_in_sequence):
+                    sys.stdout.write("\rProcessing sequence %02d, image %03d / %03d" %
+                                     (seq_id, (fr_id + 1), num_frames_in_sequence))
+                    # feed, so it erases the previous line.
+                    sys.stdout.flush()
+
                     # Load image
                     img_name = results['sequences'][seq_id - 1]['frames'][fr_id]['img_name']
                     img_name_split = img_name.split(".")
@@ -169,7 +165,7 @@ def main():
                    os.path.join(args.output_path, args.method_name, 'sequence_%02d.mp4' % seq_id)]
 
             ret_code = subprocess.call(cmd)
-            if not retcode == 0:
+            if not ret_code == 0:
                 raise ValueError('Error {} executing command: {}'.format(ret_code, ' '.join(cmd)))
 
             # Delete temporary image files used for generating video

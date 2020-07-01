@@ -12,7 +12,7 @@ def visualize_single_image(img, segm_mask, results_detection, gt, original_segm_
     if original_segm_mask is not None:
         # Read QR code
         img_qr = cv2.resize(((cv2.imread('images/qr-code_2.png')) > 180).astype(np.uint8), (200, 200))
-        print(img_qr.shape)
+        # Resize image and mask to fit on top of the screen
         img_scalled = cv2.resize(img, (426, 320))
         msk_scalled = cv2.resize(original_segm_mask, (426, 320), interpolation=cv2.INTER_NEAREST)
         kernel = np.ones((11, 11), np.float32) / 121
@@ -45,8 +45,6 @@ def visualize_single_image(img, segm_mask, results_detection, gt, original_segm_
     ax.imshow(added_image)
 
     # Plot danger zone
-    print(gt['danger_zone']['x-axis'])
-    print(gt['danger_zone']['y-axis'])
     ax.plot(gt['danger_zone']['x-axis'], gt['danger_zone']['y-axis'], marker='', color='orange', linewidth=1,
             linestyle='dashed')
 
@@ -72,7 +70,7 @@ def visualize_single_image(img, segm_mask, results_detection, gt, original_segm_
     # if original_segm_mask is None:
     #     plt.show()
 
-    return fig
+    return fig, ax
 
 
 # Plot detection rectangles
@@ -103,15 +101,13 @@ def plot_detection_rectangles(results_detection, list_name, ax, in_danger_zone=F
             rect_fg = patches.Rectangle((tmp_bbox[0], tmp_bbox[1]), tmp_bbox[2]-tmp_bbox[0], tmp_bbox[3]-tmp_bbox[1],
                                         linewidth=1, edgecolor='black', facecolor=edge_color, alpha=0.35)
             if edge_color is not 'yellow':
-                ax.text(tmp_bbox[0], tmp_bbox[1], results_detection[detection_type][list_name][i]['type'], fontsize=6)
+                ax.text(tmp_bbox[0], tmp_bbox[1], results_detection[detection_type][list_name][i]['type'] +
+                        '-%d%%' % results_detection[detection_type][list_name][i]['coverage'], fontsize=6)
             else:
                 ax.text(tmp_bbox[0], tmp_bbox[1], 'FP', fontsize=6)
 
             #ax.add_patch(rect_bg)
             ax.add_patch(rect_fg)
-
-        if edge_color == 'yellow':
-            print(tmp_bbox)
 
     return ax
 
@@ -119,8 +115,7 @@ def plot_detection_rectangles(results_detection, list_name, ax, in_danger_zone=F
 # Visualize image for video
 def visualize_image_for_video(img, segm_mask, segm_mask_overlay, results_detection, gt):
     # Overlay segmentation mask over the actual image
-    fig = visualize_single_image(img, segm_mask_overlay, results_detection, gt, segm_mask)
-    #fig.savefig('./results/bla.png')
+    fig, ax = visualize_single_image(img, segm_mask_overlay, results_detection, gt, segm_mask)
 
     rmse_t = results_detection['rmse_t']
     rmse_o = results_detection['rmse_o']
@@ -133,13 +128,20 @@ def visualize_image_for_video(img, segm_mask, segm_mask_overlay, results_detecti
     num_fns_d = len(results_detection['obstacles_danger']['fn_list'])
     f1_score = ((2 * num_tps) / (2 * num_tps + num_fps + num_fns)) * 100
 
-    ax = fig.add_axes([0, 0, 1, 1])
+    #ax = fig.add_axes([0, 0, 1, 1])
+
+    if rmse_o + rmse_u > 0:
+        rmse_o_percent = rmse_o / (rmse_o + rmse_u) * 100
+        rmse_u_percent = rmse_u / (rmse_o + rmse_u) * 100
+    else:
+        rmse_o_percent = 0
+        rmse_u_percent = 0
 
     # Overlay text statistics...
     ax.text(150, 50, "Input image", fontsize=12)
     ax.text(560, 50, "Segmentation mask", fontsize=12)
-    ax.text(880, 50, "RMSE: %d px (above: %.01f%%, under: %.01f%%)" % (rmse_t, rmse_o / (rmse_o + rmse_u) * 100,
-                                                                        rmse_u / (rmse_o + rmse_u) * 100), fontsize=12)
+    ax.text(880, 50, "RMSE: %d px (above: %.01f%%, under: %.01f%%)" % (rmse_t, rmse_o_percent, rmse_u_percent),
+            fontsize=12)
     ax.text(880, 90,  "TPs: %d" % num_tps, fontsize=12)
     ax.text(890, 110, "in danger zone: %d" % num_tps_d, fontsize=12)
     ax.text(880, 150, "FPs: %d" % num_fps, fontsize=12)

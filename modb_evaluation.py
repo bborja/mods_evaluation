@@ -117,12 +117,12 @@ def run_evaluation():
 
             # Perform evaluation on current image
             rmse_t, rmse_o, rmse_u, ou_mask, tp_list, fp_list, fn_list, \
-            tp_list_d, fp_list_d, fn_list_d,  = run_evaluation_image(args.data_path,
-                                                                     args.segmentation_path,
-                                                                     args.segmentation_colors,
-                                                                     args.method_name,
-                                                                     gt, seq_id,
-                                                                     frame_number, eval_params)
+            tp_list_d, fp_list_d, fn_list_d  = run_evaluation_image(args.data_path,
+                                                                    args.segmentation_path,
+                                                                    args.segmentation_colors,
+                                                                    args.method_name,
+                                                                    gt, seq_id,
+                                                                    frame_number, eval_params)
 
             # Add to the evaluation results
 
@@ -137,7 +137,7 @@ def run_evaluation():
                                                                                                "fn_list": fn_list_d},
                                                                           "img_name": img_name,
                                                                           "hor_name": hor_name
-                                                                         })
+                                                                          })
 
             # Update quick statistics
             total_detections[0] += len(tp_list)
