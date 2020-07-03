@@ -47,31 +47,84 @@ The computation of the overlap between two bounding-boxes is used for counting f
 If the overlap is greater than zero but does not exceed the prescribed threshold (<i>default 15%</i>), then the detection <img src="https://latex.codecogs.com/gif.latex?D_i" alt="D_i"> is considered a false-positive detection.
 
 ### &rarr; modb_evaluation.py
-This script is used to evaluate the performance of a certain segmentation method on MODB. The script will process all the images and save the results to JSON file in the following format:
+This script is used to evaluate the performance of a specified segmentation method on MODB.
+
 #### Input Arguments
 * `data-path` - <i>an absolute path to the root folder where MODB sequences are stored</i>
 * `segmentation-path` - <i>an absolute path to the folder where segmentation masks are stored</i>
 * `output-path` - <i>an absolute path to where the results and statistics of the evaluation will be stored</i>
 * `method-name` - <i>method name; this should be equal to the folder name in which the segmentation masks are located</i>
 * `sequences` - <i>a list of sequences on which the evaluation procedure is performed (empty or zero = all)</i>
-* `segmentation-colors` - <i>a 2D of segmentation colors corresponding to the three semantic labels, written in RGB format</i>
+* `segmentation-colors` - <i>a 2D array of segmentation colors corresponding to the three semantic labels, written in RGB format</i>
 * `min-overlap` - <i>minimal overlap between two bounding boxes</i>
 * `area-threshold` - <i>minimal surface area of detections/obstacles to be considered in evaluation</i>
 
 
 #### Description and Examples
+The script processes all segmentation masks of a specified method and evaluates its performance on MODB dataset. During the evaluation we particularly focus on the task of water-edge estimation and obstacle detection (within danger zone and outside of it). When the evaluation process finishes a brief summarization of the results will be displayed, while extensive evaluation information will be stored in a JSON file.
+
+The accuracy of the water-edge estimation is reported in pixels and calculated by a root-mean-square-error (RMSE) between the ground-truth water-edge position and its estimate position. We additionaly report the percentage of times when the method has overshot and undershot the position. The success of the obstacle detection and localization is measured using TP, FP, FN and an overall F1 score. Since the obstacles within the danger present more danger to the USV, we report their detection rates separetly.
+ 
+The script can be run by executing the following example command:
 ```
-$ python visualize.py --data-path ./MODB --segmentation-path ./DeepLab3_segmentations --method-name DeepLabV3_plus
+$ python visualize.py --method-name DeepLabV3_plus --sequences 1
+```
+
+Which produces the output:
+```
+Evaluated DeepLabV3_plus on 01 sequences
+Total RMSE: 001 pixels
+RMSE over:  61.9 percent
+RMSE under: 38.1 percent
+Total TP:   72  (28)
+Total FP:   7  (1)
+Total FN:   22  (14)
+Total F1:   83.2 percent
+```
+
+while the more in-depth evaluation information is stored in the JSON file, written in following format:
+```
+{'method-name": evaluated_method_name,
+ 'date-time': date_and_time_of_evaluation,
+ 'parameters': {'min-overlap': minimal_overlap_threshold,
+                'area-threshold': minimal_area_threshold},
+ 'sequences': [{'frames': ['rmse_t': rmse_t_for_current_frame,
+                           'rmse_o': rmse_overshot,
+                           'rmse_u': rmse_undershot,
+                           'obstacles': {'tp_list': [{'bbox': bounding_box,
+                                                      'area': surface_area,
+                                                      'type': obstacle_type,
+                                                      'coverage': correctly_labeled_percentage}],
+                                         'fp_list': [{'bbox': bounding_box,
+                                                      'area': surface_area}],
+                                         'fn_list': [{'bbox': bounding_box,
+                                                      'area': surface_area,
+                                                      'type': obstacle_type,
+                                                      'coverage': correctly_labeled_percentage}],
+                            'obstacles_danger': same_as_above_just_for_obstacles_within_danger_zone,
+                            'img_name': name_of_the_corresponding_image,
+                            'hor_name': name_of_the_corresponding_horizon_mask]
+               }]
+}
 ```
 
 ### &rarr; get_evaluation_statistics.py
-This script parses the results stored in JSON file and generates pretty graphs and plots.
+This script parses the results stored in JSON file and displays them in a readable format.
 
 #### Input Arguments
 * `results-path` - <i>an absolute path to the folder where the evaluation results are stored</i>
 * `method-name` - <i>name of the method to be analysed</i>
 
 #### Description and Examples
+The scripts shows evaluation statistics graphicaly. The first row of the figure visualizes detection statistics based on the surface area. Blue bars denote detections outside the danger-zone, while orange bars denote detections inside the danger-zone. The second row of the figure illustrates pie charts of detections for each obstacle type (swimmer, boat or other). The third row shows per-sequence detections and water-edge approximations. The last of the figure shows both per-sequence detections within the danger zone and detections for each obstacle type within the danger zone. 
+
+To generate the evaluation statistics we run the command:
+```
+$ python get_evaluation_statistics.py --method-name DeepLabV3_plus
+```
+
+which outputs the following figure, where statistics are generated only for the first sequence:
+<img src="images/statistics_example.jpg" alt="example of evaluation statistics graphs">
 
 ## 3. Visualization Scripts
 
@@ -90,8 +143,14 @@ This script visualizes the performance of the evaluated segmentation method and 
 * `export-video` - <i>a boolean switch for exporting a video of sequence/s</i>
 
 #### Description and Examples
+Running the following command
+```
+$ python visualize.py --method-name DeepLabV3_plus
+```
+generates videos for each sequence (in mp4 format) where in each frame obstacles, water-edge and segmentation mask are marked. An example frame from the video with all the markings looks like: 
 
-___
+<img src="images/visualization_example.jpg" alt="example of the visualization">
+
 
 ## 4. References
 [1] Bovcon and Muhovič et. al, ....<br>
