@@ -45,8 +45,8 @@ def check_tp_detections(gt, obstacle_mask_filtered, eval_params):
     # Check for overlap between filtered ground truth annotations and filtered detections
     for i in range(num_gt_obstacles):
         # Check if obstacle is sufficiently large
-        #gt_area_surface = compute_surface_area(gt['obstacles'][i]['bbox'])
-        gt_area_surface = gt['obstacles'][i]['area']
+        gt_area_surface = compute_surface_area(gt['obstacles'][i]['bbox'])
+        #gt_area_surface = gt['obstacles'][i]['area']  # RECI JONU NAJ POPRAVI AREA OD ANOTIRANIH OBJEKTOV V GT
 
         if gt_area_surface >= eval_params['area_threshold']:
             # Get current GT obstacle bounding-box

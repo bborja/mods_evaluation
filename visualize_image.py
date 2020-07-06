@@ -1,8 +1,9 @@
+import cv2
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-import cv2
+from utils import count_number_fps
 
 
 def visualize_single_image(img, segm_mask, results_detection, gt, original_segm_mask=None):
@@ -159,13 +160,3 @@ def visualize_image_for_video(img, segm_mask, segm_mask_overlay, results_detecti
     # plt.show()
 
     return fig
-
-
-def count_number_fps(fp_list):
-    num_fps = 0
-
-    num_entries = len(fp_list)
-    for i in range(num_entries):
-        num_fps += fp_list[i]['num_triggers']
-
-    return num_fps

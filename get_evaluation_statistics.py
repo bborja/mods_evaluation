@@ -3,6 +3,7 @@ import numpy as np
 import argparse
 import json
 import os
+from utils import count_number_fps
 
 # Boundaries of different size classes of obstacles
 OBSTACLE_SIZE_CLASSES = [5*5, 15*15, 30*30, 50*50, 100*100, 200*200]
@@ -84,11 +85,11 @@ def main():
 
                 # Update detections by sequence
                 det_sequences[seq_id, 0] += len(results['sequences'][seq_id]['frames'][frm]['obstacles']['tp_list'])
-                det_sequences[seq_id, 1] += len(results['sequences'][seq_id]['frames'][frm]['obstacles']['fp_list'])
+                det_sequences[seq_id, 1] += count_number_fps(results['sequences'][seq_id]['frames'][frm]['obstacles']['fp_list'])
                 det_sequences[seq_id, 2] += len(results['sequences'][seq_id]['frames'][frm]['obstacles']['fn_list'])
 
                 det_sequences_danger[seq_id, 0] += len(results['sequences'][seq_id]['frames'][frm]['obstacles_danger']['tp_list'])
-                det_sequences_danger[seq_id, 1] += len(results['sequences'][seq_id]['frames'][frm]['obstacles_danger']['fp_list'])
+                det_sequences_danger[seq_id, 1] += count_number_fps(results['sequences'][seq_id]['frames'][frm]['obstacles_danger']['fp_list'])
                 det_sequences_danger[seq_id, 2] += len(results['sequences'][seq_id]['frames'][frm]['obstacles_danger']['fn_list'])
                 # Update water edge estimation
                 tmp_rmse[0] += results['sequences'][seq_id]['frames'][frm]['rmse_t']
@@ -105,8 +106,6 @@ def main():
     plt.subplots_adjust(bottom=0.05, left=0.05, right=0.95, top=0.95, wspace=0.3, hspace=0.5)
     x_labels = ['TP', 'FP', 'FN']
     x_axis = np.arange(len(x_labels))
-    print(x_axis)
-    width_bar = 0.0
     maximum_number_of_detections = int(np.ceil(np.max(det_sizes) / 10.0)) * 10
     for i in range(1, len(OBSTACLE_SIZE_CLASSES)+1):
         if i == 0:
@@ -240,11 +239,20 @@ def update_detection_by_sizes(det_list, type_index, det_sizes):
         det_area = det_list[i]['area']
         for j in range(len(OBSTACLE_SIZE_CLASSES) + 1):
             if j == 0 and det_area <= OBSTACLE_SIZE_CLASSES[j]:
-                det_sizes[j, type_index] += 1
+                if type_index == 1:
+                    det_sizes[j, type_index] += det_list[i]['num_triggers']
+                else:
+                    det_sizes[j, type_index] += 1
             elif j == len(OBSTACLE_SIZE_CLASSES) and det_area > OBSTACLE_SIZE_CLASSES[j-1]:
-                det_sizes[j, type_index] += 1
+                if type_index == 1:
+                    det_sizes[j, type_index] += det_list[i]['num_triggers']
+                else:
+                    det_sizes[j, type_index] += 1
             elif OBSTACLE_SIZE_CLASSES[j - 1] < det_area <= OBSTACLE_SIZE_CLASSES[j]:
-                det_sizes[j, type_index] += 1
+                if type_index == 1:
+                    det_sizes[j, type_index] += det_list[i]['num_triggers']
+                else:
+                    det_sizes[j, type_index] += 1
 
     return det_sizes
 

@@ -244,4 +244,14 @@ def get_obstacle_count(np_list):
     return num_obstacles
 
 
+# Count the number of actual FP detections
+def count_number_fps(fp_list):
+    num_fps = 0
+
+    num_entries = len(fp_list)
+    for i in range(num_entries):
+        num_fps += fp_list[i]['num_triggers']
+
+    return num_fps
+
 
