@@ -13,23 +13,22 @@ def detect_obstacles_modb(gt, obstacle_mask, gt_mask, horizon_mask, eval_params,
         gt = filter_gt_danger_zone(gt, danger_zone, eval_params)
 
     # Filter the obstacles mask and extract obstacles from it
-    _, obstacle_mask = filter_obstacle_mask(obstacle_mask, eval_params)
+    obstacle_mask = filter_obstacle_mask(obstacle_mask, eval_params)
 
     # Perform the detections
     # - Detect TPs and FNs
     tp_list, fn_list = check_tp_detections(gt, obstacle_mask, eval_params)
+
+    gt_obstacles_list = np.append(tp_list, fn_list)
+
     # - Extract FPs ( but only if there are all obstacles in the image annotated, otherwise do not report FPs)
     if gt['all-annotations']:
-        fp_list = check_fp_detections(gt, obstacle_mask, gt_mask, horizon_mask, eval_params)
-        #fp_list, num_fp_dets = check_fp_detections_2(gt, obstacle_mask, gt_mask, horizon_mask, eval_params)
+        fp_list, num_fps = check_fp_detections_2(obstacle_mask, gt_obstacles_list, gt_mask, eval_params)
     else:
         fp_list = []
+        num_fps = 0
 
-    #print('******\n')
-    #print(num_fp_dets)
-    #print(fp_list)
-
-    return tp_list, fp_list, fn_list  #, num_fp_dets
+    return tp_list, fp_list, fn_list, num_fps
 
 
 # Function checks TP detections (and consequently FN detections as well)
@@ -46,132 +45,119 @@ def check_tp_detections(gt, obstacle_mask_filtered, eval_params):
     # Check for overlap between filtered ground truth annotations and filtered detections
     for i in range(num_gt_obstacles):
         # Check if obstacle is sufficiently large
-        if gt['obstacles'][i]['area'] >= eval_params['area_threshold']:
-            # Get current GT obstacle bounding-box
-            tmp_obs = gt['obstacles'][i]['bbox']
+        #gt_area_surface = compute_surface_area(gt['obstacles'][i]['bbox'])
+        gt_area_surface = gt['obstacles'][i]['area']
 
-            # Get surface area of the GT obstacle
-            tmp_area_surf = gt['obstacles'][i]['area']
+        if gt_area_surface >= eval_params['area_threshold']:
+            # Get current GT obstacle bounding-box
+            tmp_gt_obs = (gt['obstacles'][i]['bbox']).astype(np.int)
 
             # Extract bounding-box region from the filtered obstacle mask
-            tmp_area = obstacle_mask_filtered[tmp_obs[1]:tmp_obs[3], tmp_obs[0]:tmp_obs[2]]
+            obstacle_mask_area = obstacle_mask_filtered[tmp_gt_obs[1]:tmp_gt_obs[3], tmp_gt_obs[0]:tmp_gt_obs[2]]
 
             # Check the coverage of the area (pixels labeled with ones belong to obstacles, while pixels labeled with
             #   zero belong to the navigable surface for the USV
-            tmp_area_obstacles = np.sum(tmp_area)
+            num_correctly_detected_pixels = np.sum(obstacle_mask_area)
 
             # Check if enough area is covered by an obstacle to be considered a TP detection
-            if tmp_area_obstacles / tmp_area_surf >= eval_params['min_overlap']:
+            correctly_covered_percentage = num_correctly_detected_pixels / gt_area_surface
+            if correctly_covered_percentage >= eval_params['min_overlap']:
                 # Add obstacle to the list of TP detections
-                tp_detections.append({"bbox": tmp_obs.tolist(),
+                tp_detections.append({"bbox": tmp_gt_obs.tolist(),
                                       "type": gt['obstacles'][i]['type'],
-                                      "area": int(tmp_area_surf),
-                                      "coverage": int(tmp_area_obstacles / tmp_area_surf * 100)})
+                                      "area": int(gt_area_surface),
+                                      "coverage": int(correctly_covered_percentage * 100)})
 
             else:
                 # Add obstacle to the list of FN detections
-                fn_detections.append({"bbox": tmp_obs.tolist(),
+                fn_detections.append({"bbox": tmp_gt_obs.tolist(),
                                       "type": gt['obstacles'][i]['type'],
-                                      "area": int(tmp_area_surf),
-                                      "coverage": int(tmp_area_obstacles / tmp_area_surf * 100)})
+                                      "area": int(gt_area_surface),
+                                      "coverage": int(correctly_covered_percentage * 100)})
 
     # Return lists of TP and FN detections
     return tp_detections, fn_detections
 
 
 # Function checks FP detections by searching for blobs that do not overlap with any ground truth annotation
-def check_fp_detections_2(gt, obstacle_mask_filtered, gt_mask_filtered, horizon_mask, eval_params):
+def check_fp_detections_2(obstacle_mask_filtered, tp_list, gt_mask_filtered, horizon_mask):
     # Initialize false positives mask with all detections
-    fp_mask = obstacle_mask_filtered
-    # Filter out detections that correspond with an expanded ground truth obstacles and land component
-    fp_mask[gt_mask_filtered > 0] = 0
+    detections_mask = np.copy(obstacle_mask_filtered)
+    detections_mask[gt_mask_filtered > 0] = 0
 
     # Extract connected component from the filtered FP_mask. These blobs represent potential false-positive detections
-    tmp_labels = measure.label(fp_mask)
-    tmp_region_list = measure.regionprops(tmp_labels)
+    detection_labels = measure.label(detections_mask)
+    detection_regions_list = measure.regionprops(detection_labels)
+    num_detections = len(detection_regions_list)
 
-    # Initialize list of false-positive detections
-    # (Arrays will be of size n x 4, where each row is in format x_TL, y_TL, x_BR, y_BR (TL = top-L, BR = bottom-R)
-    tmp_fp_list = np.array([])
+    # Get number of TP detections
+    num_tps = len(tp_list)
+
+    # Loop through all TPs and assigned them to detection regions
+    assigned_detections = [dict() for x in range(num_detections)]
+    for i in range(num_tps):
+        # Center of TP detection in format (X, Y)
+        tmp_tp_center = np.array([tp_list[i]['bbox'][0] +
+                                  (tp_list[i]['bbox'][2] - tp_list[i]['bbox'][0]) / 2,
+                                  tp_list[i]['bbox'][1] +
+                                  (tp_list[i]['bbox'][3] - tp_list[i]['bbox'][1]) / 2],
+                                 dtype=np.int)
+
+        for j in range(num_detections):
+            # BBOX of current detection in format (Y_TL, X_TL, Y_BR, X_BR)
+            tmp_detection_bbox = detection_regions_list[j].bbox
+            if (tmp_detection_bbox[1] <= tmp_tp_center[0] <= tmp_detection_bbox[3]) and (tmp_detection_bbox[0] <= tmp_tp_center[1] <= tmp_detection_bbox[2]):
+                # If center of the TP obstacle is inside the region of the detection, then assign this TP to the
+                #   detection region...
+                if len(assigned_detections[j]) == 0:
+                    assigned_detections[j] = {'tps': [i]}
+                else:
+                    assigned_detections[j]['tps'].append(i)
+
     fp_list = []
+    num_fps = 0
 
-    num_regions = len(tmp_region_list)
-    for i in range(num_regions):
-        # Check if obstacle is large enough
-        tmp_bb = np.zeros(4)
-        tmp_bb[0] = tmp_region_list[i].bbox[1]
-        tmp_bb[1] = tmp_region_list[i].bbox[0]
-        tmp_bb[2] = tmp_region_list[i].bbox[3]
-        tmp_bb[3] = tmp_region_list[i].bbox[2]
-        if tmp_region_list[i].area >= eval_params['area_threshold']:
-            # Append the list
-            if len(tmp_fp_list) == 0:
-                tmp_fp_list = tmp_bb.astype(np.int)
-            else:
-                tmp_fp_list = np.row_stack((tmp_fp_list, tmp_bb.astype(np.int)))
+    for i in range(num_detections):
+        # Detection bbox in format Y_TL, X_TL, Y_BR, X_BR
+        tmp_detection_bbox = detection_regions_list[i].bbox
 
-    # Remove detections far above horizon
-    tmp_fp_list = remove_above_horizon(tmp_fp_list, horizon_mask)
+        # Check unassigned detections and count them as a false-positive detection
+        if len(assigned_detections[i]) == 0:
+            # Append to FP list
+            #  bbox should be in format X_TL, Y_TL, X_BR, Y_BR (TL = top-left, BR = bottom-right)
+            fp_list.append({"area": int(detection_regions_list[i].area),
+                            "bbox": np.array([tmp_detection_bbox[1], tmp_detection_bbox[0],
+                                              tmp_detection_bbox[3], tmp_detection_bbox[2]]).tolist(),
+                            "num_triggers": int(1)})
 
-    num_fp_dets = get_obstacle_count(tmp_fp_list)
+            num_fps += 1
 
-    num_obstacles = len(gt['obstacles'])
-
-    num_all_fps = 0
-
-    # Loop through the remaining detections and check their overlap with ground truth annotations
-    # If multiple ground truth annotations are covered by a single detection, then check how big this detection is and
-    #   how many FPs does it produce...
-    for i in range(num_fp_dets):
-        num_gts = 0
-        largest_size_gts = 0
-        if num_fp_dets > 1:
-            bb_det = tmp_fp_list[i, :]
+        # Else check how many TPs and covered in one blob and calculated based on the largest width, how many more FP
+        #   detections could fit inside a blob to fill it
         else:
-            bb_det = tmp_fp_list
-        detection_mask = np.zeros(gt_mask_filtered.shape)
-        detection_mask[bb_det[1]:bb_det[3],
-                       bb_det[0]:bb_det[2]] = fp_mask[bb_det[1]:bb_det[3],
-                                                      bb_det[0]:bb_det[2]]
+            tmp_detection_width = tmp_detection_bbox[3] - tmp_detection_bbox[1]
+            tmp_largest_width = 0
+            for j in range(len(assigned_detections[i]['tps'])):
+                tmp_cur_gt_width = tp_list[assigned_detections[i]['tps'][j]]['bbox'][2] - \
+                                   tp_list[assigned_detections[i]['tps'][j]]['bbox'][0]
 
-        for i_gt in range(num_obstacles):
-            bb_gt = gt['obstacles'][i_gt]['bbox']
-            bb_gt_area = gt['obstacles'][i_gt]['area']
+                tmp_detection_width -= tmp_cur_gt_width
 
-            intersection_bb = [np.max([bb_det[0], bb_gt[0]]),
-                               np.max([bb_det[1], bb_gt[1]]),
-                               np.min([bb_det[2], bb_gt[2]]),
-                               np.min([bb_det[3], bb_gt[3]])]
+                if tmp_cur_gt_width >= tmp_largest_width:
+                    tmp_largest_width = tmp_cur_gt_width
 
-            # Compute the surface area of the intersection BB
-            intersection_bb_area = compute_surface_area(intersection_bb)
-            bb_det_area = compute_surface_area(bb_det)
+            # How many largest width multiplied by 1.1 can be fitted inside the width of the detection blob
+            tmp_factor = tmp_detection_width / (1.1 * tmp_largest_width)
 
-            # Compute the surface area of the union
-            union_area = bb_det_area + bb_gt_area - intersection_bb_area
+            if tmp_factor >= 2:
+                fp_list.append({"area": int(detection_regions_list[i].area),
+                                "bbox": np.array([tmp_detection_bbox[1], tmp_detection_bbox[0],
+                                                  tmp_detection_bbox[3], tmp_detection_bbox[2]]).tolist(),
+                                "num_triggers": int(np.round(tmp_factor) - 1)})
 
-            # Calculate the intersection over union (aka overlap) score
-            overlap_score = intersection_bb_area / union_area
+                num_fps += int(np.round(tmp_factor) - 1)
 
-            if overlap_score >= eval_params['min_overlap']:
-                num_gts += 1
-                if bb_gt_area > largest_size_gts:
-                    largest_size_gts = bb_gt_area
-                # Cut-out
-                detection_mask[bb_gt[1]:bb_gt[3], bb_gt[0]:bb_gt[2]] = 0
-
-        if num_gts > 0:
-            fp_area_sum = np.sum(detection_mask)
-            num_fps = np.floor(fp_area_sum / (num_gts * largest_size_gts))
-            if num_fps >= 1:
-                num_all_fps += num_fps
-            else:
-                num_all_fps += 1
-
-            fp_list.append({"bbox": bb_det,
-                            "area": int((bb_det[2] - bb_det[0]) * (bb_det[3] - bb_det[1]))})
-
-    return fp_list, num_all_fps
+    return fp_list, num_fps
 
 
 # Function checks FP detections by searching for blobs that do not overlap with any ground truth annotation

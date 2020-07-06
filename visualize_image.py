@@ -95,18 +95,21 @@ def plot_detection_rectangles(results_detection, list_name, ax, in_danger_zone=F
                                         linewidth=2, edgecolor=edge_color, facecolor='none', linestyle=':')
             ax.add_patch(rect_fg)
         else:
-            # rect_bg = patches.Rectangle((tmp_bbox[0], tmp_bbox[1]), tmp_bbox[2]-tmp_bbox[0], tmp_bbox[3]-tmp_bbox[1],
-            #                             linewidth=2, edgecolor='black', facecolor='none')
-
-            rect_fg = patches.Rectangle((tmp_bbox[0], tmp_bbox[1]), tmp_bbox[2]-tmp_bbox[0], tmp_bbox[3]-tmp_bbox[1],
-                                        linewidth=1, edgecolor='black', facecolor=edge_color, alpha=0.35)
             if edge_color is not 'yellow':
+                rect_fg = patches.Rectangle((tmp_bbox[0], tmp_bbox[1]), tmp_bbox[2] - tmp_bbox[0],
+                                            tmp_bbox[3] - tmp_bbox[1],
+                                            linewidth=1, edgecolor='black', facecolor=edge_color, alpha=0.35)
+
                 ax.text(tmp_bbox[0], tmp_bbox[1], results_detection[detection_type][list_name][i]['type'] +
                         '-%d%%' % results_detection[detection_type][list_name][i]['coverage'], fontsize=6)
             else:
-                ax.text(tmp_bbox[0], tmp_bbox[1], 'FP', fontsize=6)
+                rect_fg = patches.Rectangle((tmp_bbox[0], tmp_bbox[1]), tmp_bbox[2] - tmp_bbox[0],
+                                            tmp_bbox[3] - tmp_bbox[1],
+                                            linewidth=1, edgecolor='black', facecolor=edge_color, alpha=0.25)
 
-            #ax.add_patch(rect_bg)
+                ax.text(tmp_bbox[0], tmp_bbox[1],
+                        'FP (%d)' % results_detection[detection_type][list_name][i]['num_triggers'], fontsize=6)
+
             ax.add_patch(rect_fg)
 
     return ax
@@ -122,8 +125,8 @@ def visualize_image_for_video(img, segm_mask, segm_mask_overlay, results_detecti
     rmse_u = results_detection['rmse_u']
     num_tps = len(results_detection['obstacles']['tp_list'])
     num_tps_d = len(results_detection['obstacles_danger']['tp_list'])
-    num_fps = len(results_detection['obstacles']['fp_list'])
-    num_fps_d = len(results_detection['obstacles_danger']['fp_list'])
+    num_fps = count_number_fps(results_detection['obstacles']['fp_list'])
+    num_fps_d = count_number_fps(results_detection['obstacles_danger']['fp_list'])
     num_fns = len(results_detection['obstacles']['fn_list'])
     num_fns_d = len(results_detection['obstacles_danger']['fn_list'])
     f1_score = ((2 * num_tps) / (2 * num_tps + num_fps + num_fns)) * 100
@@ -156,3 +159,13 @@ def visualize_image_for_video(img, segm_mask, segm_mask_overlay, results_detecti
     # plt.show()
 
     return fig
+
+
+def count_number_fps(fp_list):
+    num_fps = 0
+
+    num_entries = len(fp_list)
+    for i in range(num_entries):
+        num_fps += fp_list[i]['num_triggers']
+
+    return num_fps

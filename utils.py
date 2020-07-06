@@ -2,6 +2,7 @@ import json
 import cv2
 import os
 import numpy as np
+import matplotlib.pyplot as plt
 from skimage import measure
 from skimage import draw
 
@@ -76,6 +77,19 @@ def code_labels_to_colors(segmentation_mask):
     return segmentation_mask_new
 
 
+# Function expands regions above the ground-truth water-edge
+def expand_land(gt_mask, eval_params):
+    # how many pixels this is based on the width of the image
+    amount = np.ceil(eval_params['expand_land'] * gt_mask.shape[1]).astype(np.int)
+    # construct kernel
+    tmp_kernel = np.zeros((amount * 2 + 1, amount * 2 + 1), dtype=np.uint8)
+    tmp_kernel[amount, :] = 1
+
+    gt_mask_new = cv2.dilate(gt_mask, kernel=tmp_kernel)
+
+    return gt_mask_new
+
+
 # Function computes binary obstacle mask, where obstacles in the mask are marked with ones, while sky and sea are
 #   marked with zeros
 def generate_obstacle_mask(segmentation_mask):
@@ -107,29 +121,16 @@ def filter_obstacle_mask(obstacle_mask, eval_params):
     tmp_labels = measure.label(obstacle_mask)
     tmp_region_list = measure.regionprops(tmp_labels)
 
-    # Initialize the list of filtered detections list
-    filtered_det_obstacles = np.array([])
-
     num_regions = len(tmp_region_list)
+    # Loop through the extracted blobs
     for i in range(num_regions):
-        # Loop through the extracted blobs.
-        if tmp_region_list[i].area >= eval_params['area_threshold']:
-            # Compute the surface area
-            tmp_det_area = compute_surface_area(tmp_region_list[i].bbox)
+        # Check if the surface area is sufficiently large enough
+        # If not, then paint over the blob with zero values (aka non-obstacle)
+        if tmp_region_list[i].area < eval_params['area_threshold']:
+            obstacle_mask[tmp_region_list[i].bbox[0]:tmp_region_list[i].bbox[2],
+                          tmp_region_list[i].bbox[1]:tmp_region_list[i].bbox[3]] = 0
 
-            # Check if the surface area is sufficiently large enough
-            # Add obstacle to the list if it is, otherwise filter it out by painting over it with zero values
-            if tmp_det_area >= eval_params['area_threshold']:
-                if len(filtered_det_obstacles) == 0:
-                    filtered_det_obstacles = tmp_region_list[i].bbox
-                else:
-                    filtered_det_obstacles = np.row_stack((filtered_det_obstacles, tmp_region_list[i].bbox))
-
-            else:
-                obstacle_mask[tmp_region_list[i].bbox[1]:tmp_region_list[i].bbox[3],
-                              tmp_region_list[i].bbox[0]:tmp_region_list[i].bbox[2]] = 0
-
-    return filtered_det_obstacles, obstacle_mask
+    return obstacle_mask
 
 
 # Function computes surface of the bounding box
