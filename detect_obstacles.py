@@ -153,9 +153,9 @@ def check_fp_detections_2(obstacle_mask_filtered, tp_list, gt_mask_filtered, hor
                 fp_list.append({"area": int(detection_regions_list[i].area),
                                 "bbox": np.array([tmp_detection_bbox[1], tmp_detection_bbox[0],
                                                   tmp_detection_bbox[3], tmp_detection_bbox[2]]).tolist(),
-                                "num_triggers": int(np.round(tmp_factor) - 1)})
+                                "num_triggers": int(np.floor(tmp_factor) - 1)})
 
-                num_fps += int(np.round(tmp_factor) - 1)
+                num_fps += int(np.floor(tmp_factor) - 1)
 
     return fp_list, num_fps
 

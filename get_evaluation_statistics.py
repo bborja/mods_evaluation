@@ -182,34 +182,39 @@ def main():
     tmp_ax2_1.legend()
 
     # Plot water edge estimation by sequence
-    x_seq_number = np.ones( (num_sequences, 1) )
+    x_seq_number = np.ones((num_sequences, 1))
     tmp_ax3 = plt.subplot(4, 2, 6)
     tmp_ax3.plot(x_axis_sequences, est_water_edge[:, 0], marker='', color='blue', linewidth=2, label='RMSE Total')
     tmp_ax3.plot(x_axis_sequences, est_water_edge[:, 1], marker='', color='purple', linewidth=2, label='RMSE Overshoot')
     tmp_ax3.plot(x_axis_sequences, est_water_edge[:, 2], marker='', color='pink', linewidth=2, label='RMSE Undershoot')
     # Average
     tmp_ax3.plot(x_axis_sequences, x_seq_number * np.mean(est_water_edge[:, 0]), marker='', color='blue', linewidth=1,
-                 linestyle='dashed')  #, label='Average RMSE Total')
+                 linestyle='dashed')  # , label='Average RMSE Total')
     tmp_ax3.plot(x_axis_sequences, x_seq_number * np.mean(est_water_edge[:, 1]), marker='', color='purple', linewidth=1,
-                 linestyle='dashed')  #, label='Average RMSE Overshoot')
+                 linestyle='dashed')  # , label='Average RMSE Overshoot')
     tmp_ax3.plot(x_axis_sequences, x_seq_number * np.mean(est_water_edge[:, 2]), marker='', color='pink', linewidth=1,
-                 linestyle='dashed')  #, label='Average RMSE Undershoot')
+                 linestyle='dashed')  # , label='Average RMSE Undershoot')
     plt.title('Water-edge estimation per sequences')
     tmp_ax3.set_ylabel('Water-Edge error [px]')
     tmp_ax3.legend()
 
     # Print brief statistics:
-    print('RMSE Total: %03d' % np.mean(est_water_edge[:, 0]))
-    print('RMSE Overshoot: %.1f' % ((np.mean(est_water_edge[:, 1]) / (np.mean(est_water_edge[:, 1]) +
-                                                                      np.mean(est_water_edge[:, 2]))) * 100))
-    print('RMSE Undershoot: %.1f' % ((np.mean(est_water_edge[:, 2]) / (np.mean(est_water_edge[:, 1]) +
-                                                                       np.mean(est_water_edge[:, 2]))) * 100))
+    overall_water_edge_error = np.ceil(np.mean(est_water_edge[:, 0]))
+    overshot_water_edge_error = float(np.mean(est_water_edge[:, 1]))
+    undershot_water_edge_error = float(np.mean(est_water_edge[:, 2]))
+
+    print('RMSE Total: %03d' % overall_water_edge_error)
+    print('RMSE Overshoot: %.1f' % ((overshot_water_edge_error / (overshot_water_edge_error +
+                                                                  undershot_water_edge_error)) * 100))
+    print('RMSE Undershoot: %.1f' % ((undershot_water_edge_error / (overshot_water_edge_error +
+                                                                    undershot_water_edge_error)) * 100))
     print('TP %d' % np.sum(det_sequences[:, 0]))
     print('FP %d' % np.sum(det_sequences[:, 1]))
     print('FN %d' % np.sum(det_sequences[:, 2]))
     # Calculate F1 score (in percentages)
-    f1_score = ((np.sum(det_sequences[:, 0]) * 2) / (np.sum(det_sequences[:, 0]) * 2 + np.sum(det_sequences[:, 1]) +
-                                                     np.sum(det_sequences[:, 2]))) * 100
+    f1_score = float((np.sum(det_sequences[:, 0]) * 2) / (np.sum(det_sequences[:, 0]) * 2 +
+                                                          np.sum(det_sequences[:, 1]) +
+                                                          np.sum(det_sequences[:, 2]))) * 100
     print('F1 %.01f\n' % f1_score)
 
     plt.show()
