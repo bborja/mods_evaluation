@@ -3,7 +3,11 @@ import argparse
 import os
 import sys
 import cv2
+import time
 import matplotlib.pyplot as plt
+from prettytable import PrettyTable
+from colorama import Fore, Back, Style
+from colorama import init
 from datetime import datetime
 from utils import generate_water_mask, generate_obstacle_mask, write_json_file, read_gt_file, resize_image, \
                   code_mask_to_labels, build_sequences_list, poly2mask, expand_land
@@ -64,6 +68,7 @@ def get_arguments():
 # Run the evaluation procedure on all sequences of the MODB sequences
 # The results are stored in a single JSON file
 def run_evaluation():
+    init()  # initialize colorama
     args = get_arguments()
 
     # Norm paths...
@@ -104,18 +109,22 @@ def run_evaluation():
 
     # Loop through sequences
     for seq_index_counter in range(len(args.sequences)):
-        print("Evaluating sequence %02d / %02d...\n" % (seq_index_counter+1, len(args.sequences)))
         # Read txt file with a list of images with their corresponding ground truth annotation files
         seq_id = args.sequences[seq_index_counter]
 
         # Read ground truth annotations JSON file
         gt = read_gt_file(os.path.join(args.data_path, 'seq%02d' % seq_id, 'annotations.json'))
         num_frames = len(gt['sequence'])
+        print_progress_bar(0, num_frames, prefix='Processing sequence %02d / %02d:' % (seq_id, len(args.sequences)),
+                           suffix='Complete', length=50)
         for frame_number in range(num_frames):
             # Print progress
-            sys.stdout.write("\rProcessing image number %03d / %03d" % ((frame_number + 1), num_frames))
+            # sys.stdout.write("\rProcessing image number %03d / %03d" % ((frame_number + 1), num_frames))
             # feed, so it erases the previous line.
-            sys.stdout.flush()
+            # sys.stdout.flush()
+            print_progress_bar(frame_number + 1, num_frames,
+                               prefix='Processing sequence %02d / %02d:' % (seq_id, len(args.sequences)),
+                               suffix='Complete', length=50)
 
             img_name = gt['sequence'][frame_number]['image_file_name']
             hor_name = gt['sequence'][frame_number]['horizon_file_name']
@@ -131,9 +140,9 @@ def run_evaluation():
 
             # Add to the evaluation results
 
-            evaluation_results['sequences'][seq_id - 1]['frames'].append({"rmse_t": int(rmse_t),
-                                                                          "rmse_o": int(rmse_o),
-                                                                          "rmse_u": int(rmse_u), #"over_under_mask": ou_mask,
+            evaluation_results['sequences'][seq_id - 1]['frames'].append({"rmse_t": float(rmse_t),
+                                                                          "rmse_o": float(rmse_o),
+                                                                          "rmse_u": float(rmse_u), #"over_under_mask": ou_mask,
                                                                           "obstacles": {"tp_list": tp_list,
                                                                                         "fp_list": fp_list,
                                                                                         "fn_list": fn_list},
@@ -157,22 +166,35 @@ def run_evaluation():
         evaluation_results['sequences'][seq_id - 1]['evaluated'] = True
 
     # Print quick statistics
-    print('\n')
-    print('***********************')
-    print('Evaluated %s on %02d sequences' % (args.method_name, len(args.sequences)))
-    print('Total RMSE: %03d pixels' % np.mean(total_edge_aprox[0, :]))
-    print('RMSE over:  %.01f percent' % (np.mean(total_edge_aprox[1, :]) / (np.mean(total_edge_aprox[1, :]) +
-                                                                            np.mean(total_edge_aprox[2, :])) * 100))
-    print('RMSE under: %.01f percent' % (np.mean(total_edge_aprox[2, :]) / (np.mean(total_edge_aprox[1, :]) +
-                                                                            np.mean(total_edge_aprox[2, :])) * 100))
-    print('Total TP:   %d  (%d)' % (total_detections[0], total_detections[3]))
-    print('Total FP:   %d  (%d)' % (total_detections[1], total_detections[4]))
-    print('Total FN:   %d  (%d)' % (total_detections[2], total_detections[5]))
-    print('Total F1:   %.01f percent' % (((2 * total_detections[0]) / (2 * total_detections[0] + total_detections[1] +
-                                                                       total_detections[2])) * 100))
-    print('***********************')
-    print('* JSON file saved     *')
+    table = PrettyTable()
 
+    tmp_edge = np.ceil(np.mean(total_edge_aprox[0, :]))
+    tmp_oshot = np.mean(total_edge_aprox[1, :]) / (np.mean(total_edge_aprox[1, :]) +
+                                                   np.mean(total_edge_aprox[2, :])) * 100
+    tmp_ushot = np.mean(total_edge_aprox[2, :]) / (np.mean(total_edge_aprox[1, :]) +
+                                                   np.mean(total_edge_aprox[2, :])) * 100
+
+    wedge_line = '%d px ' + Fore.LIGHTRED_EX + '(+%.01f%%, ' + Fore.LIGHTYELLOW_EX + '-%.01f%%)' + Fore.WHITE
+    wedge_line = wedge_line % (tmp_edge, tmp_oshot, tmp_ushot)
+
+    tp_line = Fore.LIGHTGREEN_EX + '%d (%d)' + Fore.WHITE
+    tp_line = tp_line % (total_detections[0], total_detections[3])
+
+    fp_line = Fore.LIGHTYELLOW_EX + '%d (%d)' + Fore.WHITE
+    fp_line = fp_line % (total_detections[1], total_detections[4])
+
+    fn_line = Fore.LIGHTRED_EX + '%d (%d)' + Fore.WHITE
+    fn_line = fn_line % (total_detections[2], total_detections[5])
+
+    f1_line = '%.01f%% (%.01f%%)' % ((((2 * total_detections[0]) / (2 * total_detections[0] + total_detections[1] +
+                                                                    total_detections[2])) * 100),
+                                     (((2 * total_detections[3]) / (2 * total_detections[3] + total_detections[4] +
+                                                                    total_detections[5])) * 100))
+
+    table.field_names = ['Water-edge RMSE', 'TPs', 'FPs', 'FNs', 'F1']
+    table.add_row([wedge_line, tp_line, fp_line, fn_line, f1_line])
+
+    print(table.get_string(title="Results for method %s on %d sequence/s" % (args.method_name, len(args.sequences))))
 
     # Write the evaluation results to JSON file
     write_json_file(args.output_path, args.method_name, evaluation_results)
@@ -182,9 +204,6 @@ def run_evaluation():
 def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, gt, seq_id, frame_number,
                          eval_params):
     """ Reading data... """
-    # Read image
-    #print(os.path.join(data_path, 'seq%02d' % seq_id, 'frames',
-    #                              gt['sequence'][frame_number]['image_file_name']))
     img = cv2.imread(os.path.join(data_path, 'seq%02d' % seq_id, 'frames',
                                   gt['sequence'][frame_number]['image_file_name']))
     img_name_split = gt['sequence'][frame_number]['image_file_name'].split(".")
@@ -202,7 +221,6 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
     danger_zone_y = gt['sequence'][frame_number]['danger_zone']['y-axis']
     # Build danger zone mask
     danger_zone_mask = poly2mask(danger_zone_y, danger_zone_x, (img.shape[0], img.shape[1]))
-
 
     # Code mask to labels
     seg = code_mask_to_labels(seg, seg_colors)
@@ -242,7 +260,6 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
     plt.imshow(gt_mask_danger)
     """
 
-
     # Perform the evaluation of the obstacle detection
     tp_list, fp_list, fn_list, num_fps = detect_obstacles_modb(gt['sequence'][frame_number], obstacle_mask, gt_mask,
                                                                horizon_mask, eval_params)
@@ -253,13 +270,33 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
                                                                        horizon_mask, eval_params,
                                                                        danger_zone=danger_zone_mask)
 
-    # print('%d - %d' % (len(tp_list), len(tp_list_d)))
-    # print('%d - %d' % (len(fp_list), len(fp_list_d)))
-    # print('%d - %d' % (len(fn_list), len(fn_list_d)))
     plt.show()
 
     return rmse_t, rmse_o, rmse_u, ou_mask, tp_list, fp_list, fn_list, num_fps, tp_list_d, fp_list_d, fn_list_d,\
            num_fps_d
+
+
+# Print iterations progress
+def print_progress_bar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█', print_end="\r"):
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        length      - Optional  : character length of bar (Int)
+        fill        - Optional  : bar fill character (Str)
+        printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
+    """
+    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+    filled_length = int(length * iteration // total)
+    bar = fill * filled_length + '-' * (length - filled_length)
+    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end=print_end)
+    # Print New Line on Complete
+    if iteration == total:
+        print()
 
 
 if __name__ == '__main__':

@@ -3,7 +3,11 @@ import numpy as np
 import argparse
 import json
 import os
+from prettytable import PrettyTable
+from colorama import Fore, Back, Style
+from colorama import init
 from utils import count_number_fps
+from prettytable import PrettyTable
 
 # Boundaries of different size classes of obstacles
 OBSTACLE_SIZE_CLASSES = [5*5, 15*15, 30*30, 50*50, 100*100, 200*200]
@@ -27,10 +31,11 @@ def get_arguments():
 
 # Get evaluation statistics of the method
 def main():
+    init()  # Initialize colorama for colored output
+
     args = get_arguments()
 
     # Read results JSON file
-    print(os.path.join(args.results_path, 'results_%s.json' % args.method_name))
     with open(os.path.join(args.results_path, 'results_%s.json' % args.method_name)) as f:
         results = json.load(f)
 
@@ -91,6 +96,7 @@ def main():
                 det_sequences_danger[seq_id, 0] += len(results['sequences'][seq_id]['frames'][frm]['obstacles_danger']['tp_list'])
                 det_sequences_danger[seq_id, 1] += count_number_fps(results['sequences'][seq_id]['frames'][frm]['obstacles_danger']['fp_list'])
                 det_sequences_danger[seq_id, 2] += len(results['sequences'][seq_id]['frames'][frm]['obstacles_danger']['fn_list'])
+
                 # Update water edge estimation
                 tmp_rmse[0] += results['sequences'][seq_id]['frames'][frm]['rmse_t']
                 tmp_rmse[1] += results['sequences'][seq_id]['frames'][frm]['rmse_o']
@@ -198,24 +204,37 @@ def main():
     tmp_ax3.set_ylabel('Water-Edge error [px]')
     tmp_ax3.legend()
 
-    # Print brief statistics:
-    overall_water_edge_error = np.ceil(np.mean(est_water_edge[:, 0]))
-    overshot_water_edge_error = float(np.mean(est_water_edge[:, 1]))
-    undershot_water_edge_error = float(np.mean(est_water_edge[:, 2]))
+    # Print brief statistics
+    table = PrettyTable()
 
-    print('RMSE Total: %03d' % overall_water_edge_error)
-    print('RMSE Overshoot: %.1f' % ((overshot_water_edge_error / (overshot_water_edge_error +
-                                                                  undershot_water_edge_error)) * 100))
-    print('RMSE Undershoot: %.1f' % ((undershot_water_edge_error / (overshot_water_edge_error +
-                                                                    undershot_water_edge_error)) * 100))
-    print('TP %d' % np.sum(det_sequences[:, 0]))
-    print('FP %d' % np.sum(det_sequences[:, 1]))
-    print('FN %d' % np.sum(det_sequences[:, 2]))
-    # Calculate F1 score (in percentages)
-    f1_score = float((np.sum(det_sequences[:, 0]) * 2) / (np.sum(det_sequences[:, 0]) * 2 +
-                                                          np.sum(det_sequences[:, 1]) +
-                                                          np.sum(det_sequences[:, 2]))) * 100
-    print('F1 %.01f\n' % f1_score)
+    tmp_edge = np.ceil(np.mean(est_water_edge[:, 0]))
+    tmp_oshot = np.mean(est_water_edge[:, 1]) / (np.mean(est_water_edge[:, 1]) +
+                                                 np.mean(est_water_edge[:, 2])) * 100
+    tmp_ushot = np.mean(est_water_edge[:, 2]) / (np.mean(est_water_edge[:, 1]) +
+                                                 np.mean(est_water_edge[:, 2])) * 100
+
+    wedge_line = '%d px ' + Fore.LIGHTRED_EX + '(+%.01f%%, ' + Fore.LIGHTYELLOW_EX + '-%.01f%%)' + Fore.WHITE
+    wedge_line = wedge_line % (tmp_edge, tmp_oshot, tmp_ushot)
+
+    tp_line = Fore.LIGHTGREEN_EX + '%d (%d)' + Fore.WHITE
+    tp_line = tp_line % (np.sum(det_sequences[:, 0]), np.sum(det_sequences_danger[:, 0]))
+
+    fp_line = Fore.LIGHTYELLOW_EX + '%d (%d)' + Fore.WHITE
+    fp_line = fp_line % (np.sum(det_sequences[:, 1]), np.sum(det_sequences_danger[:, 1]))
+
+    fn_line = Fore.LIGHTRED_EX + '%d (%d)' + Fore.WHITE
+    fn_line = fn_line % (np.sum(det_sequences[:, 2]), np.sum(det_sequences_danger[:, 2]))
+
+    f1_score = (2 * det_sequences[:, 0]) / (2 * det_sequences[:, 0] + det_sequences[:, 1] + det_sequences[:, 2]) * 100
+    f1_score_d = (2 * det_sequences_danger[:, 0]) / (2 * det_sequences_danger[:, 0] + det_sequences_danger[:, 1] +
+                                                     det_sequences_danger[:, 2]) * 100
+
+    f1_line = '%.01f%% (%.01f%%)' % (f1_score, f1_score_d)
+
+    table.field_names = ['Water-edge RMSE', 'TPs', 'FPs', 'FNs', 'F1']
+    table.add_row([wedge_line, tp_line, fp_line, fn_line, f1_line])
+
+    print(table.get_string(title="Results for method %s on %d sequence/s" % (args.method_name, num_sequences)))
 
     plt.show()
 
