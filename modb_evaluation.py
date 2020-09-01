@@ -10,15 +10,16 @@ from colorama import Fore, Back, Style
 from colorama import init
 from datetime import datetime
 from utils import generate_water_mask, generate_obstacle_mask, write_json_file, read_gt_file, resize_image, \
-                  code_mask_to_labels, build_sequences_list, poly2mask, expand_land
+                  code_mask_to_labels, build_sequences_list, poly2mask, expand_land, build_mapping_dict
 from detect_wateredge import evaluate_water_edge
 from detect_obstacles import detect_obstacles_modb
+from scipy.stats import norm
 
 # Default paths
 # Path to the MODB dataset
-DATA_PATH = "F:/Projects/matlab/RoBoat/dataset_public"
+DATA_PATH = "E:/MODB/raw"
 # Path to the output segmentations
-SEGMENTATION_PATH = "F:/Projects/matlab/RoBoat/dataset_public"
+SEGMENTATION_PATH = "E:/MODB_output"
 # Path to the output evaluation results folder
 OUTPUT_PATH = "./results"
 # Default segmentation colors (RGB format, where first row corresponds to obstacles, second row corresponds to water and
@@ -32,6 +33,8 @@ MIN_OVERLAP = 0.5
 AREA_THRESHOLD = 5 * 5
 # Percentage to expand all regions above the water-edge
 EXPAND_LAND = 0.01
+# Percentage to expand the obstacle
+EXPAND_OBJS = 0.01
 
 
 def get_arguments():
@@ -61,6 +64,8 @@ def get_arguments():
                         help="Area threshold for obstacle detection and consideration in evaluation.")
     parser.add_argument("--expand-land", type=int, default=EXPAND_LAND,
                         help="Percentage to expand all regions above the annotated water-edge.")
+    parser.add_argument("--expand-objs", type=int, default=EXPAND_OBJS,
+                        help="Percentage to expand all object regions when checking for FPs.")
 
     return parser.parse_args()
 
@@ -81,12 +86,16 @@ def run_evaluation():
     eval_params = {
                    "min_overlap": args.min_overlap,
                    "area_threshold": args.area_threshold,
-                   "expand_land": args.expand_land
+                   "expand_land": args.expand_land,
+                   "expand_objs": args.expand_objs
                   }
+
+    # Read ground truth annotations JSON file
+    gt = read_gt_file(os.path.join(args.data_path, 'modb.json'))
 
     # List of sequences on which we will evaluate the method
     if args.sequences is None:
-        args.sequences = np.arange(28)  # Array of all sequences (presume that we have 28 sequences
+        args.sequences = np.arange(gt['dataset']['num_seq'])  # Array of all sequences (presume that we have 28 sequences
 
     # Get current date and time
     now = datetime.now()
@@ -94,49 +103,70 @@ def run_evaluation():
 
     # Initialize evaluation results dict
     evaluation_results = {
-                          "method-name": args.method_name,
-                          "date-time": date_time,
+                          "method_name": args.method_name,
+                          "date_time": date_time,
                           "parameters": {
                                           "min_overlap": "%0.2f" % args.min_overlap,
                                           "area_threshold": "%d" % args.area_threshold
                                         },
-                          "sequences": build_sequences_list(args.data_path)
+                          "sequences": build_sequences_list(gt['dataset']['num_seq']),
                          }
+    
+    # Initialize overlap results dict
+    overlap_results = {
+                       "method_name": args.method_name,
+                       "date_time": date_time,
+                       "overlap_perc_all": [],
+                       "overlap_perc_dng": []
+    }
 
     # Quick statistics
+    # Displaying detection statistics (TP, FP, FN in and out of danger zone) and water-edge statistics
     total_detections = np.zeros((6, 1), np.int)  # TP, FP, FN, TP_D, FP_D, FN_D
     total_edge_aprox = np.zeros((3, 1), np.float)  # RMSE_t, RMSE_o, RMSE_u
+
+    # Quick statistics that show all overlaps with ground truth
+    # This is useful information for selecting the thresholds...
+    total_overlap_percentages = []
+    total_overlap_percentages_d = []
+
+    # Build name mapping dict for the current sequence
+    mapping_dict_seq = build_mapping_dict(args.data_path)
 
     # Loop through sequences
     for seq_index_counter in range(len(args.sequences)):
         # Read txt file with a list of images with their corresponding ground truth annotation files
         seq_id = args.sequences[seq_index_counter]
 
-        # Read ground truth annotations JSON file
-        gt = read_gt_file(os.path.join(args.data_path, 'seq%02d' % seq_id, 'annotations.json'))
-        num_frames = len(gt['sequence'])
-        print_progress_bar(0, num_frames, prefix='Processing sequence %02d / %02d:' % (seq_id, len(args.sequences)),
+        # Read number of frames for current sequence
+        num_frames = gt['dataset']['sequences'][seq_id - 1]['num_frames']
+        print_progress_bar(0, num_frames, prefix='Processing sequence %02d / %02d:' % (seq_index_counter,
+                                                                                       len(args.sequences)),
                            suffix='Complete', length=50)
+
+        # Loop through frames in the sequence
         for frame_number in range(num_frames):
-            # Print progress
-            # sys.stdout.write("\rProcessing image number %03d / %03d" % ((frame_number + 1), num_frames))
-            # feed, so it erases the previous line.
-            # sys.stdout.flush()
             print_progress_bar(frame_number + 1, num_frames,
-                               prefix='Processing sequence %02d / %02d:' % (seq_id, len(args.sequences)),
+                               prefix='Processing sequence %02d / %02d:' % (seq_index_counter, len(args.sequences)),
                                suffix='Complete', length=50)
 
-            img_name = gt['sequence'][frame_number]['image_file_name']
-            hor_name = gt['sequence'][frame_number]['horizon_file_name']
+            img_name = gt['dataset']['sequences'][seq_id - 1]['frames'][frame_number]['image_file_name']
+            img_name_split = img_name.split('.')
+            hor_name = '%s.png' % img_name_split[0]
 
             # Perform evaluation on current image
             rmse_t, rmse_o, rmse_u, ou_mask, tp_list, fp_list, fn_list, num_fps, \
-             tp_list_d, fp_list_d, fn_list_d, num_fps_d = run_evaluation_image(args.data_path,
+             tp_list_d, fp_list_d, fn_list_d, num_fps_d, \
+             overlap_percentages, overlap_percentages_d = run_evaluation_image(args.data_path,
                                                                                args.segmentation_path,
                                                                                args.segmentation_colors,
                                                                                args.method_name,
-                                                                               gt, seq_id,
-                                                                               frame_number, eval_params)
+                                                                               gt['dataset']['sequences'][seq_id - 1],
+                                                                               seq_id, frame_number, eval_params,
+                                                                               mapping_dict_seq)
+
+            total_overlap_percentages = total_overlap_percentages + overlap_percentages
+            total_overlap_percentages_d = total_overlap_percentages_d + overlap_percentages_d
 
             # Add to the evaluation results
 
@@ -164,6 +194,9 @@ def run_evaluation():
             total_edge_aprox = np.column_stack((total_edge_aprox, [rmse_t, rmse_o, rmse_u]))
 
         evaluation_results['sequences'][seq_id - 1]['evaluated'] = True
+
+    overlap_results['overlap_perc_all'] = total_overlap_percentages
+    overlap_results['overlap_perc_dng'] = total_overlap_percentages_d
 
     # Print quick statistics
     table = PrettyTable()
@@ -198,27 +231,41 @@ def run_evaluation():
 
     # Write the evaluation results to JSON file
     write_json_file(args.output_path, args.method_name, evaluation_results)
+    # Write the overlap results to JSON file
+    write_json_file(args.output_path, '%s_overlap' % args.method_name, overlap_results)
 
 
 # Run evaluation on a single image
 def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, gt, seq_id, frame_number,
-                         eval_params):
+                         eval_params, mapping_dict_seq):
     """ Reading data... """
-    img = cv2.imread(os.path.join(data_path, 'seq%02d' % seq_id, 'frames',
-                                  gt['sequence'][frame_number]['image_file_name']))
-    img_name_split = gt['sequence'][frame_number]['image_file_name'].split(".")
+    # Read image name:
+    img_name = gt['frames'][frame_number]['image_file_name']
+    img_name_split = img_name.split('.')
+    seq_path = gt['path']
+    seq_path_split = seq_path.split('/')
+
+    # Look-up name in dict:
+    seq_name = mapping_dict_seq[seq_path_split[1]]
+    
+    # Read image
+    # print(os.path.normpath(os.path.join(data_path + seq_path, img_name)))
+    img = cv2.imread(os.path.join(data_path + seq_path, img_name))
 
     # Read horizon mask
-    horizon_mask = cv2.imread(os.path.join(data_path, 'seq%02d' % seq_id, 'horizons',
-                                           gt['sequence'][frame_number]['horizon_file_name']),
-                              cv2.IMREAD_GRAYSCALE)
+    # horizon_mask = cv2.imread(os.path.join(data_path, 'seq%02d' % seq_id, 'horizons',
+    #                                        gt['sequence'][frame_number]['horizon_file_name']),
+    #                           cv2.IMREAD_GRAYSCALE)
 
     # Read segmentation mask
-    seg = cv2.imread(os.path.join(segmentation_path, 'seq%02d' % seq_id, method_name, "%s.png" % img_name_split[0]))
+    seg = cv2.imread(os.path.join(segmentation_path, seq_name,
+                                  method_name, "%04d.png" % (frame_number*10)))
+
+    horizon_mask = cv2.imread(os.path.join(data_path, seq_path_split[1], 'imus', '%s.png' % img_name_split[0]), cv2.IMREAD_GRAYSCALE)
 
     # Read danger zone
-    danger_zone_x = gt['sequence'][frame_number]['danger_zone']['x-axis']
-    danger_zone_y = gt['sequence'][frame_number]['danger_zone']['y-axis']
+    danger_zone_x = gt['frames'][frame_number]['danger_zone']['x_axis']
+    danger_zone_y = gt['frames'][frame_number]['danger_zone']['y_axis']
     # Build danger zone mask
     danger_zone_mask = poly2mask(danger_zone_y, danger_zone_x, (img.shape[0], img.shape[1]))
 
@@ -238,7 +285,7 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
     # water_mask_danger = (np.logical_and(water_mask, danger_zone_mask)).astype(np.uint8)
 
     # Perform the evaluation of the water-edge
-    rmse_t, rmse_o, rmse_u, ou_mask, land_mask = evaluate_water_edge(gt['sequence'][frame_number], water_mask,
+    rmse_t, rmse_o, rmse_u, ou_mask, land_mask = evaluate_water_edge(gt['frames'][frame_number], water_mask,
                                                                      eval_params)
 
     # Calculate GT mask (This is land mask with an extension of the undershot regions)
@@ -261,19 +308,21 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
     """
 
     # Perform the evaluation of the obstacle detection
-    tp_list, fp_list, fn_list, num_fps = detect_obstacles_modb(gt['sequence'][frame_number], obstacle_mask, gt_mask,
-                                                               horizon_mask, eval_params)
+    tp_list, fp_list, fn_list, num_fps, overlap_percentages = detect_obstacles_modb(gt['frames'][frame_number],
+                                                                                    obstacle_mask, gt_mask,
+                                                                                    horizon_mask, eval_params)
 
     # Perform the evaluation of the obstacle detection inside the danger zone only
-    tp_list_d, fp_list_d, fn_list_d, num_fps_d = detect_obstacles_modb(gt['sequence'][frame_number],
-                                                                       obstacle_mask_danger, gt_mask_danger,
-                                                                       horizon_mask, eval_params,
-                                                                       danger_zone=danger_zone_mask)
+    tp_list_d, fp_list_d, fn_list_d, num_fps_d, overlap_perc_d = detect_obstacles_modb(gt['frames'][frame_number],
+                                                                                       obstacle_mask_danger,
+                                                                                       gt_mask_danger,
+                                                                                       horizon_mask, eval_params,
+                                                                                       danger_zone=danger_zone_mask)
 
     plt.show()
 
     return rmse_t, rmse_o, rmse_u, ou_mask, tp_list, fp_list, fn_list, num_fps, tp_list_d, fp_list_d, fn_list_d,\
-           num_fps_d
+           num_fps_d, overlap_percentages, overlap_perc_d
 
 
 # Print iterations progress

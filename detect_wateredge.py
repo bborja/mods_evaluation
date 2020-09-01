@@ -6,24 +6,25 @@ from utils import poly2mask, calculate_root_mean
 # Function performs water edge evaluation
 def evaluate_water_edge(gt, water_mask, eval_params):
     # Get the number of danger lines
-    num_danger_lines = len(gt['water-edges'])
+    num_danger_lines = len(gt['water_edges'])
 
     # Initialize land mask
     land_mask = np.zeros(water_mask.shape)
 
     # Build land mask (ones above the danger lines)
     for i in range(num_danger_lines):
-        tmp_danger_line_x = gt['water-edges'][i]['x-axis']
-        tmp_danger_line_y = gt['water-edges'][i]['y-axis']
+        tmp_danger_line_x = np.array(gt['water_edges'][i]['x_axis'])
+        tmp_danger_line_y = np.array(gt['water_edges'][i]['y_axis'])
 
-        # Generate a land mask above the current danger line
-        # The mask should be the same size as water-mask
-        tmp_mask = poly2mask(np.concatenate([[0], tmp_danger_line_y, [0]]),
-                             np.concatenate([[tmp_danger_line_x[0]], tmp_danger_line_x, [tmp_danger_line_x[-1]]]),
-                             (water_mask.shape[0], water_mask.shape[1]))
-
-        # Add generated land mask of the current danger line to the total land mask...
-        land_mask = (np.logical_or(land_mask, tmp_mask)).astype(np.uint8)
+        if 2 <= tmp_danger_line_x.size == tmp_danger_line_y.size and tmp_danger_line_y.size >= 2:
+            # Generate a land mask above the current danger line
+            # The mask should be the same size as water-mask
+            tmp_mask = poly2mask(np.concatenate(([0], tmp_danger_line_y, [0]), axis=0),
+                                 np.concatenate(([tmp_danger_line_x[0]], tmp_danger_line_x, [tmp_danger_line_x[-1]]), axis=0),
+                                 (water_mask.shape[0], water_mask.shape[1]))
+    
+            # Add generated land mask of the current danger line to the total land mask...
+            land_mask = (np.logical_or(land_mask, tmp_mask)).astype(np.uint8)
 
     # Remove large GT obstacle annotations from the land mask
     for i in range(len(gt['obstacles'])):
