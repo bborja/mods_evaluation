@@ -47,8 +47,8 @@ def visualize_single_image(img, segm_mask, results_detection, gt, original_segm_
     ax.imshow(added_image)
 
     # Plot danger zone
-    ax.plot(gt['danger_zone']['x_axis'], gt['danger_zone']['y_axis'], marker='', color='orange', linewidth=1,
-            linestyle='dashed')
+    #ax.plot(gt['danger_zone']['x_axis'], gt['danger_zone']['y_axis'], marker='', color='orange', linewidth=1,
+    #        linestyle='dashed')
 
     # Plot water-edge danger lines
     num_danger_lines = len(gt['water_edges'])

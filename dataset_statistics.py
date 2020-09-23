@@ -14,7 +14,7 @@ from scipy.stats import norm
 from sklearn.neighbors import KernelDensity
 
 # Path to the MODB dataset
-DATA_PATH = "E:/modd_3_full"
+DATA_PATH = "E:/MODB/raw"
 OBSTACLE_SIZE_CLASSES = [5*5, 15*15, 30*30, 50*50, 100*100, 200*200]
 
 
@@ -41,7 +41,7 @@ def get_dataset_statistics():
     danger_zone_30 = cv2.imread('E:/MODB/danger_zone_30.png', cv2.IMREAD_GRAYSCALE)
 
     # Read ground truth file
-    with open(os.path.normpath(os.path.join(args.data_path, 'modd3.json'))) as f:
+    with open(os.path.normpath(os.path.join(args.data_path, 'modb.json'))) as f:
         gt = json.load(f)
 
     # PieChart data
@@ -67,10 +67,8 @@ def get_dataset_statistics():
     num_sequences = gt['dataset']['num_seq']
 
     # Loop through all sequences
-    for seq_num in range(num_sequences-1):
+    for seq_num in range(num_sequences):
         # Get number of annotated frames inside the sequence
-        if(seq_num == 96):
-            print(gt['dataset']['sequences'][seq_num])
         tmp_num_frames = gt['dataset']['sequences'][seq_num]['num_frames']
         # Loop through the frames inside the sequence
         for fr_num in range(tmp_num_frames):
@@ -82,7 +80,8 @@ def get_dataset_statistics():
             
             num_wateredges += tmp_num_wateredge
             
-            if gt['dataset']['sequences'][seq_num]['frames'][fr_num]['all_annotations'] == 'true':
+            #if gt['dataset']['sequences'][seq_num]['frames'][fr_num]['all_annotations'] == 'true':
+            if gt['dataset']['sequences'][seq_num]['exhaustive']:
                 tmp_all_annotations = True
             else:
                 tmp_all_annotations = False
@@ -116,7 +115,7 @@ def get_dataset_statistics():
                     heat_mask_o[tmp_bbox[1]:tmp_bbox[1] + tmp_bbox[3], tmp_bbox[0]:tmp_bbox[0] + tmp_bbox[2]] += 1
                     size_classes_obstacles = update_detection_by_sizes(size_classes_obstacles, 1, tmp_area)
                     tmp_type_number = 1
-                else:
+                elif tmp_type == 'person':
                     sizes_p.append(tmp_area)
                     num_gt_object_annotations[2] += 1
                     heat_mask_p[tmp_bbox[1]:tmp_bbox[1] + tmp_bbox[3], tmp_bbox[0]:tmp_bbox[0] + tmp_bbox[2]] += 1

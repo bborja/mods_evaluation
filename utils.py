@@ -111,7 +111,8 @@ def generate_obstacle_mask(segmentation_mask, gt_obstacles):
         if gt_obstacles[i]['type'] == 'negative':
             tmp_bbox = gt_obstacles[i]['bbox']
             # Overpaint this area as a non-obstacle
-            obstacle_mask[tmp_bbox[1]:, tmp_bbox[0]:tmp_bbox[2]] = 0
+            # Extra: Expand box a bit, otherwise some FPs still go through
+            obstacle_mask[tmp_bbox[1]-10:np.min([957, tmp_bbox[3]+10]), tmp_bbox[0]-10:tmp_bbox[2]+10] = 0
     
     return obstacle_mask
 

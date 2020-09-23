@@ -17,7 +17,7 @@ matplotlib.rcParams['ps.fonttype'] = 42
 
 # Boundaries of different size classes of obstacles
 OBSTACLE_SIZE_CLASSES = [5*5, 15*15, 30*30, 50*50, 100*100, 200*200]
-OBSTACLE_TYPE_CLASSES = ['swimmer', 'vessel', 'other']
+OBSTACLE_TYPE_CLASSES = ['person', 'ship', 'other']
 
 RESULTS_PATH = './results'
 
@@ -108,13 +108,13 @@ def main():
                 det_sequences_danger[seq_id, 2] += len(results['sequences'][seq_id]['frames'][frm]['obstacles_danger']['fn_list'])
 
                 # Update water edge estimation
-                tmp_rmse[0] += results['sequences'][seq_id]['frames'][frm]['rmse_t']
-                tmp_rmse[1] += results['sequences'][seq_id]['frames'][frm]['rmse_o']
-                tmp_rmse[2] += results['sequences'][seq_id]['frames'][frm]['rmse_u']
+                tmp_rmse[0] += results['sequences'][seq_id]['frames'][frm]['we_rmse']
+                tmp_rmse[1] += results['sequences'][seq_id]['frames'][frm]['we_o']
+                tmp_rmse[2] += results['sequences'][seq_id]['frames'][frm]['we_u']
 
             est_water_edge[seq_id, 0] = tmp_rmse[0] / num_frames_in_sequence
-            est_water_edge[seq_id, 1] = tmp_rmse[1] / num_frames_in_sequence
-            est_water_edge[seq_id, 2] = tmp_rmse[2] / num_frames_in_sequence
+            est_water_edge[seq_id, 1] = tmp_rmse[1]
+            est_water_edge[seq_id, 2] = tmp_rmse[2]
 
     # Plot sizes detection rate
     fig = plt.figure(1, figsize=(15, 10))

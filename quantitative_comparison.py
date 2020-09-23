@@ -47,13 +47,13 @@ def main():
     total_detections_per_sequence = np.zeros((num_methods, 8))
 
     # Initialize array of size (num_methods x 97) for storing water-edge rmse of each method and each sequence
-    water_edges = np.zeros((num_methods, 97))
+    water_edges = np.zeros((num_methods, 94))
     
     method_names = []
 
     # Detection rates (per sequence)
     detection_rates = np.zeros((num_methods, 6))
-    f1_per_sequence = np.zeros((num_methods, 97))
+    f1_per_sequence = np.zeros((num_methods, 94))
 
     # Loop through the methods...
     for i in range(num_methods):
@@ -70,7 +70,7 @@ def main():
 
     # Initialize spider-plot
     theta = radar_factory(N, frame='polygon')
-    detection_rates *= 100 / 97
+    detection_rates *= 100 / 94
 
     # Generate detection data statistics
     data = generate_detection_data(total_detections)
@@ -101,8 +101,8 @@ def main():
 
     # Water edge comparison
     ax2 = fig.add_subplot(1, 2, 2, projection='rectilinear')
-    x_axis = np.arange(1, 98, 1)
-    ax2.set_xlim(1, 97)
+    x_axis = np.arange(1, 95, 1)
+    ax2.set_xlim(1, 94)
     #ax2.set_xticks(x_axis)
     for d, color in zip(water_edges, colors):
         ax2.plot(x_axis, d, color=color)
@@ -131,7 +131,7 @@ def main():
 
     # Water edge comparison
     ax22 = fig2.add_subplot(2, 2, 2, projection='rectilinear')
-    ax22.set_xlim(1, 97)
+    ax22.set_xlim(1, 94)
     # ax2.set_xticks(x_axis)
     for d, color in zip(water_edges, colors):
         ax22.plot(x_axis, d, color=color)
@@ -139,7 +139,7 @@ def main():
     # F1 per sequence
     f1_per_sequence *= 100
     ax23 = fig2.add_subplot(2, 2, 4, projection='rectilinear')
-    ax23.set_xlim(1, 97)
+    ax23.set_xlim(1, 94)
     for d, color in zip(f1_per_sequence, colors):
         ax23.plot(x_axis, d, color=color)
 
