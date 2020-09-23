@@ -8,7 +8,8 @@ import matplotlib.pyplot as plt
 
 
 # Function performs obstacle detection evaluation and return a list of TP, FP and FN detections with their BBoxes
-def detect_obstacles_modb(gt, obstacle_mask, gt_mask, ignore_abv_strad, horizon_mask, eval_params, danger_zone=None):
+def detect_obstacles_modb(gt, obstacle_mask, gt_mask, ignore_abv_strad, horizon_mask, eval_params, exhaustive,
+                          danger_zone=None):
 
     # Filter GT obstacle annotations - keep only those that are inside the danger zone mask
     if danger_zone is not None:
@@ -32,7 +33,7 @@ def detect_obstacles_modb(gt, obstacle_mask, gt_mask, ignore_abv_strad, horizon_
     # plt.show()
 
     # - Extract FPs ( but only if there are all obstacles in the image annotated, otherwise do not report FPs)
-    if gt['all_annotations'] == 'true':
+    if exhaustive:
         obstacle_mask, gt_ah, horizon_mask_lower = remove_above_horizon_2(obstacles_mask=obstacle_mask, 
                                                                           groundtruth_list=gt_obstacles_list,
                                                                           horizon_mask=horizon_mask)
@@ -81,7 +82,7 @@ def check_tp_detections(gt, obstacle_mask_filtered, eval_params):
         # gt_area_surface = compute_surface_area(gt['obstacles'][i]['bbox'])
         gt_area_surface = gt['obstacles'][i]['area']
 
-        if gt_area_surface >= eval_params['area_threshold']:
+        if gt_area_surface >= eval_params['area_threshold'] and gt['obstacles'][i]['type'] != 'negative':
             # Get current GT obstacle bounding-box
             if isinstance(gt['obstacles'][i]['bbox'], list):
                 tmp_gt_obs = (np.array(gt['obstacles'][i]['bbox']).astype(np.int))

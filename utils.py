@@ -98,12 +98,21 @@ def expand_land(gt_mask, eval_params):
 
 # Function computes binary obstacle mask, where obstacles in the mask are marked with ones, while sky and sea are
 #   marked with zeros
-def generate_obstacle_mask(segmentation_mask):
+def generate_obstacle_mask(segmentation_mask, gt_obstacles):
     # Initialize the obstacle mask
     obstacle_mask = np.zeros((segmentation_mask.shape[0], segmentation_mask.shape[1]))
     # Add the obstacle component
     obstacle_mask[segmentation_mask == 0] = 1
-
+    
+    # Get number of obstacles
+    num_obstacles = len(gt_obstacles)
+    # Loop through obstacles and check if some of them is "negative" aka ignore region
+    for i in range(num_obstacles):
+        if gt_obstacles[i]['type'] == 'negative':
+            tmp_bbox = gt_obstacles[i]['bbox']
+            # Overpaint this area as a non-obstacle
+            obstacle_mask[tmp_bbox[1]:, tmp_bbox[0]:tmp_bbox[2]] = 0
+    
     return obstacle_mask
 
 
@@ -190,7 +199,7 @@ def write_json_file(output_path, method_name, json_content):
 
 # Function prepares ground truth annotation of obstacles
 def prepare_gt_obs_annotations(gt):
-    num_sequences = gt['dataset']['num_seq'] - 1
+    num_sequences = gt['dataset']['num_seq']
     for cur_seq in range(num_sequences):
         num_frames = gt['dataset']['sequences'][cur_seq]['num_frames']
         for fr in range(num_frames):
@@ -199,12 +208,12 @@ def prepare_gt_obs_annotations(gt):
                 tmp_bb = np.array(np.round(gt['dataset']['sequences'][cur_seq]['frames'][fr]['obstacles'][i]['bbox'])).astype(np.int)
                 tmp_bb[2] += tmp_bb[0]  # Change width to right-most point of a bounding-box
                 tmp_bb[3] += tmp_bb[1]  # Change height to bottom-most point of a bounding-box
-                gt['dataset']['sequences'][cur_seq]['frames'][fr]['obstacles'][i]['bbox'] = (tmp_bb - 1)  # Update annotations
+                gt['dataset']['sequences'][cur_seq]['frames'][fr]['obstacles'][i]['bbox'] = tmp_bb  # Update annotations
 
             num_water_edges = len(gt['dataset']['sequences'][cur_seq]['frames'][fr]['water_edges'])
             for i in range(num_water_edges):
-                tmp_x_values = np.array(np.round(gt['dataset']['sequences'][cur_seq]['frames'][fr]['water_edges'][i]['x_axis'])) #- 1
-                tmp_y_values = np.array(np.round(gt['dataset']['sequences'][cur_seq]['frames'][fr]['water_edges'][i]['y_axis'])) #- 1
+                tmp_x_values = np.array(np.round(gt['dataset']['sequences'][cur_seq]['frames'][fr]['water_edges'][i]['x_axis']))
+                tmp_y_values = np.array(np.round(gt['dataset']['sequences'][cur_seq]['frames'][fr]['water_edges'][i]['y_axis']))
                 gt['dataset']['sequences'][cur_seq]['frames'][fr]['water_edges'][i]['x_axis'] = tmp_x_values
                 gt['dataset']['sequences'][cur_seq]['frames'][fr]['water_edges'][i]['y_axis'] = tmp_y_values
 

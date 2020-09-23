@@ -98,7 +98,6 @@ def run_evaluation():
     # List of sequences on which we will evaluate the method
     if args.sequences is None:
         args.sequences = np.arange(1, gt['dataset']['num_seq'] + 1)
-    print(args.sequences)
 
     # Get current date and time
     now = datetime.now()
@@ -317,7 +316,7 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
 
     """ Perform the evaluation """
     # Generate obstacle mask
-    obstacle_mask = generate_obstacle_mask(seg)
+    obstacle_mask = generate_obstacle_mask(seg, gt['frames'][frame_number]['obstacles'])
 
     """ Get connected components of obstacles """
     # Extract connected components from the obstacle mask.
@@ -376,17 +375,24 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
     plt.imshow(gt_mask_danger)
     """
 
+    if gt['exhaustive'] == 1:
+        exhaustive_annotations = True
+    else:
+        exhaustive_annotations = False
+
     # Perform the evaluation of the obstacle detection
     tp_list, fp_list, fn_list, num_fps, overlap_percentages = detect_obstacles_modb(gt['frames'][frame_number],
                                                                                     obstacle_mask, gt_mask,
                                                                                     ignore_abv_strad,
-                                                                                    horizon_mask, eval_params)
+                                                                                    horizon_mask, eval_params,
+                                                                                    exhaustive_annotations)
 
     # Perform the evaluation of the obstacle detection inside the danger zone only
     tp_list_d, fp_list_d, fn_list_d, num_fps_d, overlap_perc_d = detect_obstacles_modb(gt['frames'][frame_number],
                                                                                        obstacle_mask_danger,
                                                                                        gt_mask_danger, ignore_abv_strad,
                                                                                        horizon_mask, eval_params,
+                                                                                       exhaustive_annotations,
                                                                                        danger_zone=danger_zone_mask)
 
     plt.show()
