@@ -13,10 +13,10 @@ from visualize_image import visualize_single_image, visualize_image_for_video
 SEQUENCES = None
 FRAME = None
 EXPORT_VIDEO = True
-OUTPUT_PATH = './results/video_output/'
+OUTPUT_PATH = 'E:/MODB_results/video_output/'
 RESULTS_PATH = './results'
-DATA_PATH = "F:/Projects/matlab/RoBoat/dataset_public"
-SEGMENTATION_PATH = "F:/Projects/matlab/RoBoat/dataset_public"
+DATA_PATH = "E:/MODB/raw"
+SEGMENTATION_PATH = "E:/MODB_output"
 SEGMENTATION_COLORS = np.array([[  0,   0,   0],
                                 [255,   0,   0],
                                 [  0, 255,   0]])
@@ -70,16 +70,21 @@ def main():
             if not os.path.exists(os.path.join(args.output_path)):
                 os.mkdir(os.path.join(args.output_path))
             os.mkdir(os.path.join(args.output_path, args.method_name))
-            os.mkdir(os.path.join(args.output_path, args.method_name, 'tmp_frames'))
+
+    gt = read_gt_file(os.path.join(args.data_path, 'modb.json'))
 
     if args.frame is not None and len(args.frame) == 1:
         if args.sequences is not None and len(args.sequences) == 1:
+
+            if not os.path.exists(os.path.join(args.output_path, args.method_name, 'seq%02d' % seq_id)):
+                os.mkdir(os.path.join(args.output_path, args.method_name, 'seq%02d' % seq_id))
+                os.mkdir(os.path.join(args.output_path, args.method_name, 'seq%02d' % seq_id, 'tmp_frames'))
+
             # Load image
-            img = cv2.imread(os.path.join(args.data_path,
+            seq_path = gt['dataset']['sequences'][seq_id - 1]['path']
+            img = cv2.imread(os.path.join(args.data_path, seq_path,
                                           results['sequences'][args.sequences-1]['frames'][args.frame-1]['img_name']))
-            # Load ground truth
-            gt = read_gt_file(os.path.join(args.data_path,
-                                           results['sequences'][args.sequences-1]['frames'][args.frame]['ant_name']))
+            
             # Load segmentation output
             seg = cv2.imread(os.path.join(args.segmentation_path, 'seq%02d' % args.sequences, args.method_name,
                                           'mask_%03d.png' % args.frame))
@@ -97,7 +102,7 @@ def main():
 
             # Visualize image
             visualize_single_image(img, seg, results['sequences'][args.sequences-1]['frames'][args.frame],
-                                   gt[args.frame])
+                                   gt['dataset']['sequences'][seq_id-1]['frames'][fr_id])
 
         else:
             print('<Error>: Sequence not specified or more than one sequence given!')
@@ -105,31 +110,37 @@ def main():
 
     else:
         if args.sequences is None:
-            args.sequences = np.arange(len(results['sequences']))
+            args.sequences = np.arange(1, len(results['sequences']))
 
         for seq_id in args.sequences:
+            # Create folders if they dont exist yet
+            if not os.path.exists(os.path.join(args.output_path, args.method_name, 'seq%02d' % seq_id)):
+                os.mkdir(os.path.join(args.output_path, args.method_name, 'seq%02d' % seq_id))
+                os.mkdir(os.path.join(args.output_path, args.method_name, 'seq%02d' % seq_id, 'tmp_frames'))
+
             if results['sequences'][seq_id - 1]['evaluated']:
                 num_frames_in_sequence = len(results['sequences'][seq_id - 1]['frames'])
 
-                # Load ground truth of sequence
-                gt = read_gt_file(os.path.join(args.data_path, 'seq%02d' % seq_id, 'annotations.json'))
-
+                frame_counter = 0
                 for fr_id in range(num_frames_in_sequence):
                     sys.stdout.write("\rProcessing sequence %02d, image %03d / %03d" %
                                      (seq_id, (fr_id + 1), num_frames_in_sequence))
                     # feed, so it erases the previous line.
                     sys.stdout.flush()
 
+                    seq_path = gt['dataset']['sequences'][seq_id - 1]['path']
+
                     # Load image
                     img_name = results['sequences'][seq_id - 1]['frames'][fr_id]['img_name']
                     img_name_split = img_name.split(".")
-                    img = cv2.imread(os.path.join(args.data_path, 'seq%02d' % seq_id, 'frames', img_name))
+                    img = cv2.imread(os.path.join(args.data_path + seq_path, img_name))
                     # Convert BGR TO RGB for visualization
                     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
                     # Load segmentation output
                     seg = cv2.imread(os.path.join(args.segmentation_path, 'seq%02d' % seq_id,
-                                                  args.method_name, '%s.png' % img_name_split[0]))
+                                                  args.method_name, '%04d.png' % (frame_counter*10)))
+
                     seg = resize_image(seg, (img.shape[1], img.shape[0]))
 
                     #ou_mask = results['sequences'][seq_id]['frames'][fr_id]['over_under_mask']
@@ -149,27 +160,32 @@ def main():
                     # seg = output segmentation mask
                     # seg_overlay = output segmentation mask with an additional visual information of over/under w.edge
                     fig1 = visualize_image_for_video(img, seg, seg_ou, results['sequences'][seq_id-1]['frames'][fr_id],
-                                                     gt['sequence'][fr_id])
+                                                     gt['dataset']['sequences'][seq_id-1]['frames'][fr_id])
 
                     if args.export_video:
-                        fig1.savefig(os.path.join(args.output_path, args.method_name, 'tmp_frames', '%08d.png' % fr_id))
+                        fig1.savefig(os.path.join(args.output_path, args.method_name, 'seq%02d' % seq_id, 'tmp_frames', '%08d.png' % fr_id))
                     else:
                         plt.show()
+                        
+                    frame_counter += 1
 
             else:
                 print('<Error>: Sequence %d was not evaluated' % seq_id)
 
+        print('\n')
+        
         if args.export_video:
             # Export frames to video
-            cmd = ['ffmpeg', '-i', os.path.join(args.output_path, args.method_name, 'tmp_frames', '%08d.png'),
-                   os.path.join(args.output_path, args.method_name, 'sequence_%02d.mp4' % seq_id)]
+            cmd = ['ffmpeg', '-i', os.path.join(args.output_path, args.method_name, 'seq%02d' % seq_id, 'tmp_frames', '%08d.png'),
+                   '-r', '10', os.path.join(args.output_path, args.method_name, 'sequence_%02d.mp4' % seq_id)]
 
             ret_code = subprocess.call(cmd)
             if not ret_code == 0:
                 raise ValueError('Error {} executing command: {}'.format(ret_code, ' '.join(cmd)))
 
             # Delete temporary image files used for generating video
-            tmp_folder = os.path.join(args.output_path, args.method_name, 'tmp_frames')
+            """ Uncomment when releasing the code...
+            tmp_folder = os.path.join(args.output_path, args.method_name, 'seq%02d' % seq_id, 'tmp_frames')
             for filename in os.listdir(tmp_folder):
                 file_path = os.path.join(tmp_folder, filename)
                 try:
@@ -179,6 +195,7 @@ def main():
                         shutil.rmtree(file_path)
                 except Exception as e:
                     print('Failed to delete %s. Reason: %s' % (file_path, e))
+            """
 
 
 if __name__ == "__main__":

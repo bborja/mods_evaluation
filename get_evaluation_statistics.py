@@ -8,10 +8,16 @@ from colorama import Fore, Back, Style
 from colorama import init
 from utils import count_number_fps
 from prettytable import PrettyTable
+from scipy.stats import norm
+from sklearn.neighbors import KernelDensity
+
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
 
 # Boundaries of different size classes of obstacles
 OBSTACLE_SIZE_CLASSES = [5*5, 15*15, 30*30, 50*50, 100*100, 200*200]
-OBSTACLE_TYPE_CLASSES = ['swimmer', 'boat', 'other']
+OBSTACLE_TYPE_CLASSES = ['swimmer', 'vessel', 'other']
 
 RESULTS_PATH = './results'
 
@@ -38,6 +44,10 @@ def main():
     # Read results JSON file
     with open(os.path.join(args.results_path, 'results_%s.json' % args.method_name)) as f:
         results = json.load(f)
+        
+    # Read overlap results JSON file
+    with open(os.path.join(args.results_path, 'results_%s_overlap.json' % args.method_name)) as f:
+        overlap_results = json.load(f)
 
     # Get number of all sequences
     num_sequences = len(results['sequences'])
@@ -204,6 +214,63 @@ def main():
     tmp_ax3.set_ylabel('Water-Edge error [px]')
     tmp_ax3.legend()
 
+    # Print detection overlap statistics...
+    """
+    plt.figure(2)
+    plt.clf()
+
+    overlap_perc_all = overlap_results['overlap_perc_all']
+    overlap_perc_dng = overlap_results['overlap_perc_dng']
+    
+
+    x_d = np.linspace(0, 1, 100)
+    kde = KernelDensity(bandwidth=0.05, kernel='gaussian')
+    kde.fit(np.array(overlap_perc_all)[:, np.newaxis])
+    kde.fit(np.array(overlap_perc_dng)[:, np.newaxis])
+
+    # score_samples returns the log of the probability density
+    logprob_all = kde.score_samples(x_d[:, None])
+    max_density_all_ind = np.argmax(np.exp(logprob_all))
+    max_density_all_val = np.exp(logprob_all[max_density_all_ind]) + 1
+    
+    logprob_dng = kde.score_samples(x_d[:, None])
+    max_density_dng_ind = np.argmax(np.exp(logprob_dng))
+    max_density_dng_val = np.exp(logprob_dng[max_density_dng_ind])
+    
+    current_overlap_threshold = float(results['parameters']['min_overlap'])
+
+    # Plot graph
+    plt.figure(2)
+    plt.subplot(221)
+    plt.fill_between(x_d, np.exp(logprob_all), alpha=0.5)
+    plt.plot(overlap_perc_all, np.full_like(overlap_perc_all, -0.1), '|k', markeredgewidth=1)
+    plt.scatter(x_d[max_density_all_ind], np.exp(logprob_all[max_density_all_ind]))
+    plt.text(x_d[max_density_all_ind], np.exp(logprob_all[max_density_all_ind]), '%.02f' % x_d[max_density_all_ind])
+    plt.plot([current_overlap_threshold, current_overlap_threshold], [-0.2, max_density_all_val], ':r')
+    plt.ylim([-0.2, max_density_all_val])
+    
+    plt.subplot(222)
+    tmp_hist_all_y, _, _ = plt.hist(overlap_perc_all, bins=10)
+    max_hist_all_y = tmp_hist_all_y.max()
+    plt.plot([current_overlap_threshold, current_overlap_threshold], [0, max_hist_all_y], ':r')
+    plt.ylim([0, max_hist_all_y])
+    plt.xlim([0, 1])
+    
+    plt.subplot(223)
+    plt.fill_between(x_d, np.exp(logprob_dng), alpha=0.5)
+    plt.plot(overlap_perc_dng, np.full_like(overlap_perc_dng, -0.1), '|k', markeredgewidth=1)
+    plt.scatter(x_d[max_density_dng_ind], np.exp(logprob_dng[max_density_dng_ind]))
+    plt.text(x_d[max_density_dng_ind], np.exp(logprob_dng[max_density_dng_ind]), '%.02f' % x_d[max_density_dng_ind])
+    plt.plot([current_overlap_threshold, current_overlap_threshold], [-0.2, max_density_all_val], ':r')
+    plt.ylim([-0.2, max_density_all_val])
+    
+    plt.subplot(224)
+    plt.hist(overlap_perc_dng, bins=10)
+    plt.plot([current_overlap_threshold, current_overlap_threshold], [0, max_hist_all_y], ':r')
+    plt.ylim([0, max_hist_all_y])
+    plt.xlim([0, 1])
+    """
+
     # Print brief statistics
     table = PrettyTable()
 
@@ -225,17 +292,19 @@ def main():
     fn_line = Fore.LIGHTRED_EX + '%d (%d)' + Fore.WHITE
     fn_line = fn_line % (np.sum(det_sequences[:, 2]), np.sum(det_sequences_danger[:, 2]))
 
-    f1_score = (2 * det_sequences[:, 0]) / (2 * det_sequences[:, 0] + det_sequences[:, 1] + det_sequences[:, 2]) * 100
-    f1_score_d = (2 * det_sequences_danger[:, 0]) / (2 * det_sequences_danger[:, 0] + det_sequences_danger[:, 1] +
-                                                     det_sequences_danger[:, 2]) * 100
+    f1_score = (2 * np.sum(det_sequences[:, 0])) / (2 * np.sum(det_sequences[:, 0]) + np.sum(det_sequences[:, 1]) + 
+                                                    np.sum(det_sequences[:, 2])) * 100
+    f1_score_d = (2 * np.sum(det_sequences_danger[:, 0])) / (2 * np.sum(det_sequences_danger[:, 0]) + 
+                                                             np.sum(det_sequences_danger[:, 1]) +
+                                                             np.sum(det_sequences_danger[:, 2])) * 100
 
-    f1_line = '%.01f%% (%.01f%%)' % (f1_score, f1_score_d)
+    f1_line = '%.01f%% (%.01f%%)' % (np.mean(f1_score), 0)  #f1_score_d)
 
     table.field_names = ['Water-edge RMSE', 'TPs', 'FPs', 'FNs', 'F1']
     table.add_row([wedge_line, tp_line, fp_line, fn_line, f1_line])
 
     print(table.get_string(title="Results for method %s on %d sequence/s" % (args.method_name, num_sequences)))
-
+    
     plt.show()
 
 

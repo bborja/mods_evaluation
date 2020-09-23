@@ -8,14 +8,11 @@ import matplotlib.pyplot as plt
 
 
 # Function performs obstacle detection evaluation and return a list of TP, FP and FN detections with their BBoxes
-def detect_obstacles_modb(gt, obstacle_mask, gt_mask, horizon_mask, eval_params, danger_zone=None):
+def detect_obstacles_modb(gt, obstacle_mask, gt_mask, ignore_abv_strad, horizon_mask, eval_params, danger_zone=None):
 
     # Filter GT obstacle annotations - keep only those that are inside the danger zone mask
     if danger_zone is not None:
         gt = filter_gt_danger_zone(gt, danger_zone, eval_params)
-
-    # Filter the obstacles mask and extract obstacles from it
-    obstacle_mask = filter_obstacle_mask(obstacle_mask, eval_params)
 
     # Perform the detections
     # - Detect TPs and FNs
@@ -35,13 +32,31 @@ def detect_obstacles_modb(gt, obstacle_mask, gt_mask, horizon_mask, eval_params,
     # plt.show()
 
     # - Extract FPs ( but only if there are all obstacles in the image annotated, otherwise do not report FPs)
-    if gt['all_annotations']:
-        obstacle_mask = remove_above_horizon_2(obstacles_mask=obstacle_mask, horizon_mask=horizon_mask)
-        fp_list, num_fps = check_fp_detections_2(obstacle_mask, gt_obstacles_list, gt_mask, eval_params)
+    if gt['all_annotations'] == 'true':
+        obstacle_mask, gt_ah, horizon_mask_lower = remove_above_horizon_2(obstacles_mask=obstacle_mask, 
+                                                                          groundtruth_list=gt_obstacles_list,
+                                                                          horizon_mask=horizon_mask)
+        obstacle_mask_f = np.logical_and(np.logical_not(ignore_abv_strad), obstacle_mask)
+        fp_list, num_fps = check_fp_detections_2(obstacle_mask_f, gt_obstacles_list, gt_mask, gt_ah, horizon_mask_lower,
+                                                 eval_params)
     else:
         fp_list = []
         num_fps = 0
-
+    
+    """
+    plt.figure(888)
+    plt.clf()
+    plt.subplot(221)
+    plt.imshow(obstacle_mask)
+    plt.subplot(222)
+    plt.imshow(ignore_abv_strad)
+    plt.subplot(223)
+    plt.imshow(obstacle_mask_f)
+    plt.subplot(224)
+    plt.imshow(horizon_mask)
+    plt.show()
+    """
+    
     return tp_list, fp_list, fn_list, num_fps, overlap_percentages_list
 
 
@@ -63,12 +78,15 @@ def check_tp_detections(gt, obstacle_mask_filtered, eval_params):
     # Check for overlap between filtered ground truth annotations and filtered detections
     for i in range(num_gt_obstacles):
         # Check if obstacle is sufficiently large
-        gt_area_surface = compute_surface_area(gt['obstacles'][i]['bbox'])
-        #gt_area_surface = gt['obstacles'][i]['area']  # RECI JONU NAJ POPRAVI AREA OD ANOTIRANIH OBJEKTOV V GT
+        # gt_area_surface = compute_surface_area(gt['obstacles'][i]['bbox'])
+        gt_area_surface = gt['obstacles'][i]['area']
 
         if gt_area_surface >= eval_params['area_threshold']:
             # Get current GT obstacle bounding-box
-            tmp_gt_obs = (gt['obstacles'][i]['bbox']).astype(np.int)
+            if isinstance(gt['obstacles'][i]['bbox'], list):
+                tmp_gt_obs = (np.array(gt['obstacles'][i]['bbox']).astype(np.int))
+            else:
+                tmp_gt_obs = (gt['obstacles'][i]['bbox']).astype(np.int)
 
             # Extract bounding-box region from the filtered obstacle mask
             obstacle_mask_area = obstacle_mask_filtered[tmp_gt_obs[1]:tmp_gt_obs[3], tmp_gt_obs[0]:tmp_gt_obs[2]]
@@ -103,106 +121,121 @@ def check_tp_detections(gt, obstacle_mask_filtered, eval_params):
 
 
 # Function checks FP detections by searching for blobs that do not overlap with any ground truth annotation
-def check_fp_detections_2(obstacle_mask_filtered, tp_list, gt_mask_filtered, eval_params):
+def check_fp_detections_2(obstacle_mask_filtered, gt_obstacle_list, gt_mask_filtered, gt_ah, horizon_mask, eval_params):
     # Initialize false positives mask with all detections
     detections_mask = np.copy(obstacle_mask_filtered)
     detections_mask[gt_mask_filtered > 0] = 0
 
-    # Extract connected component from the filtered FP_mask. These blobs represent potential false-positive detections
-    detection_labels = measure.label(detections_mask)
-    detection_regions_list = measure.regionprops(detection_labels)
+    detections_mask_labels = measure.label(detections_mask)
+    detection_regions_list = measure.regionprops(detections_mask_labels)
+    
     # detection_regions_list = group_near_by_detections(detection_regions_list, detection_labels)
     num_detections = len(detection_regions_list)
-    
-    # plt.figure(55)
-    # plt.clf()
-    # plt.subplot(121)
-    # plt.imshow(detection_labels)
-    # plt.subplot(122)
-    # plt.imshow(detections_mask)
-    # plt.show()
+
+    #plt.figure(55)
+    #plt.clf()
+    #plt.subplot(221)
+    #plt.imshow(detections_mask_labels)
+    #plt.subplot(222)
+    #plt.imshow(detections_mask)
+    #plt.subplot(223)
+    #plt.imshow(horizon_mask)
+    #plt.subplot(224)
+    #plt.imshow(gt_ah)
+    #plt.show()
 
     # Get number of TP detections
-    num_tps = len(tp_list)
+    num_gt_obs = len(gt_obstacle_list)
 
-    # Loop through all TPs and assigned them to detection regions
-    assigned_detections = [dict() for x in range(num_detections)]
-    for i in range(num_tps):
-        # Center of TP detection in format (X, Y)
-        tmp_tp_center = np.array([tp_list[i]['bbox'][0] +
-                                  (tp_list[i]['bbox'][2] - tp_list[i]['bbox'][0]) / 2,
-                                  tp_list[i]['bbox'][1] +
-                                  (tp_list[i]['bbox'][3] - tp_list[i]['bbox'][1]) / 2],
-                                 dtype=np.int)
-
-        for j in range(num_detections):
-            # BBOX of current detection in format (Y_TL, X_TL, Y_BR, X_BR)
-            tmp_detection_bbox = detection_regions_list[j].bbox
-            if (tmp_detection_bbox[1] <= tmp_tp_center[0] <= tmp_detection_bbox[3]) and \
-                    (tmp_detection_bbox[0] <= tmp_tp_center[1] <= tmp_detection_bbox[2]):
-                # If center of the TP obstacle is inside the region of the detection, then assign this TP to the
-                #   detection region...
-                if len(assigned_detections[j]) == 0:
-                    assigned_detections[j] = {'tps': [i]}
-                else:
-                    assigned_detections[j]['tps'].append(i)
-
+    # Initialize FP list
     fp_list = []
     num_fps = 0
 
+    # Loop through all detections on screen
     for i in range(num_detections):
-        # Detection bbox in format Y_TL, X_TL, Y_BR, X_BR
+        # Get BBOX of current detection in format (Y_TL, X_TL, Y_BR, X_BR)
         tmp_detection_bbox = detection_regions_list[i].bbox
 
-        # Check unassigned detections and count them as a false-positive detection
-        if len(assigned_detections[i]) == 0:
-            # Check if the detection is fully contained inside ground truth bounding-box annotation
-            is_contained = False
-            for tp_i in range(num_tps):
-                tmp_tp_area = tp_list[tp_i]['area']
-                tmp_to_expand = np.ceil(math.sqrt(tmp_tp_area) * eval_params['expand_objs'])
-                tmp_tp_bbox = tp_list[tp_i]['bbox']
-                
-                if (tmp_tp_bbox[0] - tmp_to_expand <= tmp_detection_bbox[1] and
-                        tmp_detection_bbox[3] <= tmp_tp_bbox[2] + tmp_to_expand and
-                        tmp_tp_bbox[1] - tmp_to_expand <= tmp_detection_bbox[0] and
-                        tmp_detection_bbox[2] <= tmp_tp_bbox[3] + tmp_to_expand):
-                    is_contained = True
-                    break
-            # Append to FP list
-            #  bbox should be in format X_TL, Y_TL, X_BR, Y_BR (TL = top-left, BR = bottom-right)
-            if not is_contained:
-                fp_list.append({"area": int(detection_regions_list[i].area),
-                                "bbox": np.array([tmp_detection_bbox[1], tmp_detection_bbox[0],
-                                                  tmp_detection_bbox[3], tmp_detection_bbox[2]]).tolist(),
-                                "num_triggers": int(1)})
+        # Get surface area of current detection
+        #   Note: THIS IS NOT A BBOX SURFACE AREA
+        tmp_detection_area = detection_regions_list[i].area
+        
+        # Get surface area of current detection
+        #   Note: THIS IS A BBOX SURFACE AREA
+        tmp_detection_surf = np.round((tmp_detection_bbox[2] - tmp_detection_bbox[0]) * 
+                                      (tmp_detection_bbox[3] - tmp_detection_bbox[1]))
 
-                num_fps += 1
+        # Get detection label
+        tmp_detection_label = detection_regions_list[i].label
 
-        # Else check how many TPs and covered in one blob and calculated based on the largest width, how many more FP
-        #   detections could fit inside a blob to fill it
-        else:
+        # Extract binary mask where only pixels belonging to the current detection label are set to one
+        tmp_detection_mask = (detections_mask_labels == tmp_detection_label) * 1
+        
+        horizon_mask = 1 - horizon_mask
+        # Check if detection is large enough
+        if tmp_detection_area > eval_params['area_threshold'] and \
+                ((np.sum(horizon_mask[tmp_detection_bbox[1]:tmp_detection_bbox[3], tmp_detection_bbox[0]:tmp_detection_bbox[3]]) > 0 and np.sum(gt_ah[:, tmp_detection_bbox[0]:tmp_detection_bbox[2]]) == 0) or
+                 (np.sum(horizon_mask[tmp_detection_bbox[1]:tmp_detection_bbox[3], tmp_detection_bbox[0]:tmp_detection_bbox[3]]) == 0)):
+            
+            # Get width of the detection
             tmp_detection_width = tmp_detection_bbox[3] - tmp_detection_bbox[1]
-            tmp_largest_width = 0
-            for j in range(len(assigned_detections[i]['tps'])):
-                tmp_cur_gt_width = tp_list[assigned_detections[i]['tps'][j]]['bbox'][2] - \
-                                   tp_list[assigned_detections[i]['tps'][j]]['bbox'][0]
-
-                tmp_detection_width -= tmp_cur_gt_width
-
-                if tmp_cur_gt_width >= tmp_largest_width:
-                    tmp_largest_width = tmp_cur_gt_width
-
-            # How many largest width multiplied by 1.1 can be fitted inside the width of the detection blob
-            tmp_factor = tmp_detection_width / (1.1 * tmp_largest_width)
-
-            if tmp_factor >= 2:
-                fp_list.append({"area": int(detection_regions_list[i].area),
-                                "bbox": np.array([tmp_detection_bbox[1], tmp_detection_bbox[0],
-                                                  tmp_detection_bbox[3], tmp_detection_bbox[2]]).tolist(),
-                                "num_triggers": int(np.floor(tmp_factor) - 1)})
-
-                num_fps += int(np.floor(tmp_factor) - 1)
+            
+            # Initialize counter of assigned GT obstacles
+            assigned_gt_obstacles = 0
+            assigned_gt_obstacles_partially = 0
+            tmp_largest_gt_width = 0  # largest width of the assigned obstacle
+    
+            # Loop through all GT detections and check if we can assign any to current detection
+            for j in range(num_gt_obs):
+                # Get BBOX of current GT obstacle in format (X_TL, Y_TL, X_BR, Y_BR)
+                tmp_gt_obs_bbox = gt_obstacle_list[j]['bbox']
+                tmp_gt_width = tmp_gt_obs_bbox[2] - tmp_gt_obs_bbox[0]
+    
+                # Get surface area of current GT obstacle
+                #   Note: THIS IS A BBOX SURFACE AREA
+                tmp_gt_obs_area = gt_obstacle_list[j]['area']
+                
+                # Extract part where the GT obstacle is located
+                tmp_gt_coverage = tmp_detection_mask[tmp_gt_obs_bbox[1]:tmp_gt_obs_bbox[3],
+                                                     tmp_gt_obs_bbox[0]:tmp_gt_obs_bbox[2]]
+                
+                # Check if the current ground_truth annotation is covered by the current detection label
+    
+                # If GT obstacle is sufficiently covered, then assign this GT obstacle to current detection
+                if np.sum(tmp_gt_coverage) / tmp_gt_obs_area > eval_params['min_overlap']:
+                    # Subtract from the detection width the current width of the assigned GT obstacle
+                    tmp_detection_width -= tmp_gt_width
+                    # Update the largest GT width
+                    if tmp_largest_gt_width < tmp_gt_width:
+                        tmp_largest_gt_width = tmp_gt_width
+                    assigned_gt_obstacles += 1
+                    
+                else:
+                    if np.sum(tmp_gt_coverage) / tmp_detection_area > eval_params['min_overlap']:
+                        # This is a partially assigned GT (that means, that the detection is probably (almost) fully
+                        # encapsulated inside this GT, therefore the detection should not be counted as FP
+                        assigned_gt_obstacles_partially += 1
+                    
+            # Calculate number of FP detection based on assigned TP to the blob
+            if assigned_gt_obstacles > 0:
+                # How many largest widths * 1.1 can be fitted inside the remaining width of the detection blob
+                tmp_factor = tmp_detection_width / (1.1 * tmp_largest_gt_width)
+    
+                if tmp_factor >= 2:
+                    fp_list.append({"area": int(tmp_detection_area),
+                                    "bbox": np.array([tmp_detection_bbox[1], tmp_detection_bbox[0],
+                                                      tmp_detection_bbox[3], tmp_detection_bbox[2]]).tolist(),
+                                    "num_triggers": int(np.floor(tmp_factor) - 1)})
+    
+                    num_fps += int(np.floor(tmp_factor) - 1)
+                
+            else:
+                if assigned_gt_obstacles_partially == 0:
+                    num_fps += 1
+                    fp_list.append({"area": int(tmp_detection_area),
+                                    "bbox": np.array([tmp_detection_bbox[1], tmp_detection_bbox[0],
+                                                      tmp_detection_bbox[3], tmp_detection_bbox[2]]).tolist(),
+                                    "num_triggers": int(1)})
 
     return fp_list, num_fps
 
@@ -361,15 +394,30 @@ def filter_gt_danger_zone(gt, danger_zone_mask, eval_params):
     return gt
 
 
-def remove_above_horizon_2(obstacles_mask, horizon_mask):
+def remove_above_horizon_2(obstacles_mask, groundtruth_list, horizon_mask):
+    horizon_mask[:, 0] = horizon_mask[:, 1]
     dilatation_type = cv2.MORPH_ELLIPSE
     dilatation_size = 50
     element = cv2.getStructuringElement(dilatation_type, (2 * dilatation_size + 1, 2 * dilatation_size + 1),
                                         (dilatation_size, dilatation_size))
 
-    above_horizon_mask = cv2.dilate(horizon_mask, element)        
+    above_horizon_mask = cv2.dilate(horizon_mask, element)
 
-    return obstacles_mask * above_horizon_mask
+    # Create mask of ground truth obstacles
+    gt_mask = np.zeros(obstacles_mask.shape)
+    num_gts = len(groundtruth_list)
+    for i in range(num_gts):
+        tmp_gt_bb = groundtruth_list[i]['bbox']
+        gt_mask[tmp_gt_bb[1]:tmp_gt_bb[3], tmp_gt_bb[0]:tmp_gt_bb[2]] = 1
+
+    # Logical and with horizon mask
+    lower_horizon_mask = cv2.erode(horizon_mask, element)
+    gt_mask = gt_mask * (1 - lower_horizon_mask)
+
+    # Filter first those obstacles that are significantly above the horizon
+    filtered_obstacles_1 = obstacles_mask * above_horizon_mask
+
+    return filtered_obstacles_1, gt_mask, lower_horizon_mask
 
 
 # Remove annotations way above the horizon. This detections should not count towards FPs as they do not affect the

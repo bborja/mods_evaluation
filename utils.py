@@ -82,8 +82,14 @@ def expand_land(gt_mask, eval_params):
     # how many pixels this is based on the width of the image
     amount = np.ceil(eval_params['expand_land'] * gt_mask.shape[1]).astype(np.int)
     # construct kernel
-    tmp_kernel = np.zeros((amount * 2 + 1, amount * 2 + 1), dtype=np.uint8)
-    tmp_kernel[amount, :] = 1
+    
+    # kernel for only horizontal expansion
+    #tmp_kernel = np.zeros((amount * 2 + 1, amount * 2 + 1), dtype=np.uint8)
+    #tmp_kernel[amount, :] = 1
+    
+    # kernel for both horizontal and vertical expansion
+    #tmp_kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (amount * 2 + 1, amount * 2 + 1))
+    tmp_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (amount * 2 + 1, amount * 2 + 1))
 
     gt_mask_new = cv2.dilate(gt_mask, kernel=tmp_kernel)
 
@@ -184,21 +190,23 @@ def write_json_file(output_path, method_name, json_content):
 
 # Function prepares ground truth annotation of obstacles
 def prepare_gt_obs_annotations(gt):
-    num_frames = len(gt['sequence'])
-    for fr in range(num_frames):
-        num_obstacles = len(gt['sequence'][fr]['obstacles'])
-        for i in range(num_obstacles):
-            tmp_bb = np.array(np.round(gt['sequence'][fr]['obstacles'][i]['bbox'])).astype(np.int)
-            tmp_bb[2] += tmp_bb[0]  # Change width to right-most point of a bounding-box
-            tmp_bb[3] += tmp_bb[1]  # Change height to bottom-most point of a bounding-box
-            gt['sequence'][fr]['obstacles'][i]['bbox'] = (tmp_bb - 1)  # Update annotations
+    num_sequences = gt['dataset']['num_seq'] - 1
+    for cur_seq in range(num_sequences):
+        num_frames = gt['dataset']['sequences'][cur_seq]['num_frames']
+        for fr in range(num_frames):
+            num_obstacles = len(gt['dataset']['sequences'][cur_seq]['frames'][fr]['obstacles'])
+            for i in range(num_obstacles):
+                tmp_bb = np.array(np.round(gt['dataset']['sequences'][cur_seq]['frames'][fr]['obstacles'][i]['bbox'])).astype(np.int)
+                tmp_bb[2] += tmp_bb[0]  # Change width to right-most point of a bounding-box
+                tmp_bb[3] += tmp_bb[1]  # Change height to bottom-most point of a bounding-box
+                gt['dataset']['sequences'][cur_seq]['frames'][fr]['obstacles'][i]['bbox'] = (tmp_bb - 1)  # Update annotations
 
-        num_water_edges = len(gt['sequence'][fr]['water-edges'])
-        for i in range(num_water_edges):
-            tmp_x_values = np.array(np.round(gt['sequence'][fr]['water-edges'][i]['x-axis'])) - 1
-            tmp_y_values = np.array(np.round(gt['sequence'][fr]['water-edges'][i]['y-axis'])) - 1
-            gt['sequence'][fr]['water-edges'][i]['x-axis'] = tmp_x_values
-            gt['sequence'][fr]['water-edges'][i]['y-axis'] = tmp_y_values
+            num_water_edges = len(gt['dataset']['sequences'][cur_seq]['frames'][fr]['water_edges'])
+            for i in range(num_water_edges):
+                tmp_x_values = np.array(np.round(gt['dataset']['sequences'][cur_seq]['frames'][fr]['water_edges'][i]['x_axis'])) #- 1
+                tmp_y_values = np.array(np.round(gt['dataset']['sequences'][cur_seq]['frames'][fr]['water_edges'][i]['y_axis'])) #- 1
+                gt['dataset']['sequences'][cur_seq]['frames'][fr]['water_edges'][i]['x_axis'] = tmp_x_values
+                gt['dataset']['sequences'][cur_seq]['frames'][fr]['water_edges'][i]['y_axis'] = tmp_y_values
 
     return gt
 
@@ -212,21 +220,14 @@ def calculate_root_mean(elements_list):
 
 
 # Generate list of all sequences in the dataset
-def build_sequences_list(data_path):
+def build_sequences_list(num_total_sequences_in_dataset):
     sequences_list = []
 
-    f_reader = open(os.path.join(data_path, 'dataset_overview.txt'), 'r')
-    current_line = f_reader.readline()  # Read current line in text file
-    while current_line:
-        # current_line = sequence_id number_of_frames
-        current_line_split = current_line.split(" ")
-        sequences_list.append({"id": current_line_split[0],
+    for i in range(1, num_total_sequences_in_dataset+1):
+        sequences_list.append({"id": i,
                                "evaluated": False,
                                "frames": []})
 
-        current_line = f_reader.readline()
-
-    f_reader.close()
     return sequences_list
 
 
@@ -253,5 +254,19 @@ def count_number_fps(fp_list):
         num_fps += fp_list[i]['num_triggers']
 
     return num_fps
+
+
+# Build dict for sequence image names mapping
+def build_mapping_dict(data_path):
+    mapping_dict = {}
+    # Read data
+    f = open(os.path.join(data_path, 'sequence_mapping_new.txt'), "r")
+    for x in f:
+        y = x.rstrip().split(' ')
+        mapping_dict.update({y[0]: y[1]})
+
+    return mapping_dict
+
+
 
 

@@ -36,7 +36,8 @@ def visualize_single_image(img, segm_mask, results_detection, gt, original_segm_
     figsize = width / float(dpi), height / float(dpi)
 
     # Create a figure of the right size with one axes that takes up the full figure
-    fig = plt.figure(figsize=figsize)
+    fig = plt.figure(99, figsize=figsize)
+    fig.clf()
     ax = fig.add_axes([0, 0, 1, 1])
 
     # Hide spines, ticks, etc.
@@ -46,17 +47,19 @@ def visualize_single_image(img, segm_mask, results_detection, gt, original_segm_
     ax.imshow(added_image)
 
     # Plot danger zone
-    ax.plot(gt['danger_zone']['x-axis'], gt['danger_zone']['y-axis'], marker='', color='orange', linewidth=1,
+    ax.plot(gt['danger_zone']['x_axis'], gt['danger_zone']['y_axis'], marker='', color='orange', linewidth=1,
             linestyle='dashed')
 
     # Plot water-edge danger lines
-    num_danger_lines = len(gt['water-edges'])
+    num_danger_lines = len(gt['water_edges'])
     for i in range(num_danger_lines):
-        tmp_danger_line_x = gt['water-edges'][i]['x-axis']
-        tmp_danger_line_y = gt['water-edges'][i]['y-axis']
-        ax.plot(tmp_danger_line_x, tmp_danger_line_y, marker='', color='black', linewidth=3, linestyle='solid')
-        ax.plot(tmp_danger_line_x, tmp_danger_line_y, marker='', color='pink', linewidth=1, linestyle='dashed')
-        ax.text(tmp_danger_line_x[0], tmp_danger_line_y[0] - 2, 'water-edge-%d' % i, fontsize=6)
+        if gt['water_edges'][i]['x_axis'].size == gt['water_edges'][i]['y_axis'].size > 1 and \
+           len(gt['water_edges'][i]['x_axis']) == len(gt['water_edges'][i]['y_axis']) > 1:
+            tmp_danger_line_x = gt['water_edges'][i]['x_axis']
+            tmp_danger_line_y = gt['water_edges'][i]['y_axis']
+            ax.plot(tmp_danger_line_x, tmp_danger_line_y, marker='', color='black', linewidth=3, linestyle='solid')
+            ax.plot(tmp_danger_line_x, tmp_danger_line_y, marker='', color='pink', linewidth=1, linestyle='dashed')
+            ax.text(tmp_danger_line_x[0], tmp_danger_line_y[0] - 2, 'water_edge-%d' % i, fontsize=6)
 
     # Plot detection rectangles
     #ax = plt.gca()
@@ -121,16 +124,19 @@ def visualize_image_for_video(img, segm_mask, segm_mask_overlay, results_detecti
     # Overlay segmentation mask over the actual image
     fig, ax = visualize_single_image(img, segm_mask_overlay, results_detection, gt, segm_mask)
 
-    rmse_t = results_detection['rmse_t']
-    rmse_o = results_detection['rmse_o']
-    rmse_u = results_detection['rmse_u']
+    rmse_t = results_detection['we_rmse']
+    rmse_o = results_detection['we_o']
+    rmse_u = results_detection['we_u']
     num_tps = len(results_detection['obstacles']['tp_list'])
     num_tps_d = len(results_detection['obstacles_danger']['tp_list'])
     num_fps = count_number_fps(results_detection['obstacles']['fp_list'])
     num_fps_d = count_number_fps(results_detection['obstacles_danger']['fp_list'])
     num_fns = len(results_detection['obstacles']['fn_list'])
     num_fns_d = len(results_detection['obstacles_danger']['fn_list'])
-    f1_score = ((2 * num_tps) / (2 * num_tps + num_fps + num_fns)) * 100
+    if num_tps + num_fps + num_fns > 0:
+        f1_score = ((2 * num_tps) / (2 * num_tps + num_fps + num_fns)) * 100
+    else:
+        f1_score = np.nan
 
     #ax = fig.add_axes([0, 0, 1, 1])
 

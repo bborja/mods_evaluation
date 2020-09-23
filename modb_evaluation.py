@@ -11,9 +11,11 @@ from colorama import init
 from datetime import datetime
 from utils import generate_water_mask, generate_obstacle_mask, write_json_file, read_gt_file, resize_image, \
                   code_mask_to_labels, build_sequences_list, poly2mask, expand_land, build_mapping_dict
+from danger_zone import plane_from_IMU, danger_zone_to_mask
 from detect_wateredge import evaluate_water_edge
 from detect_obstacles import detect_obstacles_modb
 from scipy.stats import norm
+from skimage import measure
 
 # Default paths
 # Path to the MODB dataset
@@ -95,7 +97,8 @@ def run_evaluation():
 
     # List of sequences on which we will evaluate the method
     if args.sequences is None:
-        args.sequences = np.arange(gt['dataset']['num_seq'])  # Array of all sequences (presume that we have 28 sequences
+        args.sequences = np.arange(1, gt['dataset']['num_seq'] + 1)
+    print(args.sequences)
 
     # Get current date and time
     now = datetime.now()
@@ -123,7 +126,9 @@ def run_evaluation():
     # Quick statistics
     # Displaying detection statistics (TP, FP, FN in and out of danger zone) and water-edge statistics
     total_detections = np.zeros((6, 1), np.int)  # TP, FP, FN, TP_D, FP_D, FN_D
-    total_edge_aprox = np.zeros((3, 1), np.float)  # RMSE_t, RMSE_o, RMSE_u
+    total_edge_approx = []  # RMSE
+    total_over_under = np.zeros(2)  # Overshot, undershot water-edge (number of times when it was not exact)
+    total_land_detections = np.zeros(2)  # Total number of TP/FN land detections
 
     # Quick statistics that show all overlaps with ground truth
     # This is useful information for selecting the thresholds...
@@ -140,14 +145,29 @@ def run_evaluation():
 
         # Read number of frames for current sequence
         num_frames = gt['dataset']['sequences'][seq_id - 1]['num_frames']
-        print_progress_bar(0, num_frames, prefix='Processing sequence %02d / %02d:' % (seq_index_counter,
+        print_progress_bar(0, num_frames, prefix='Processing sequence %02d / %02d:' % (seq_index_counter + 1,
                                                                                        len(args.sequences)),
                            suffix='Complete', length=50)
 
+        # Get sequence path
+        seq_path = gt['dataset']['sequences'][seq_id - 1]['path']
+        # Strip path and get sequence name
+        seq_name = seq_path.rstrip().split('/')[1]
+        # Get calibration ID
+        calib_id = seq_name.split('-')[0]
+        # Get calibration file name
+        calib_file = 'E:/MODB/calibration-%s.yaml' % calib_id
+
+        # Read calibration file and extract calibration matrix (M) and distortion coefficients (D)
+        fs = cv2.FileStorage(calib_file, cv2.FILE_STORAGE_READ)
+        M = fs.getNode("M1").mat()
+        D = fs.getNode("D1").mat()
+
         # Loop through frames in the sequence
-        for frame_number in range(num_frames):
+        for frame_number in range(num_frames):               
+                
             print_progress_bar(frame_number + 1, num_frames,
-                               prefix='Processing sequence %02d / %02d:' % (seq_index_counter, len(args.sequences)),
+                               prefix='Processing sequence %02d / %02d:' % (seq_index_counter + 1, len(args.sequences)),
                                suffix='Complete', length=50)
 
             img_name = gt['dataset']['sequences'][seq_id - 1]['frames'][frame_number]['image_file_name']
@@ -155,7 +175,7 @@ def run_evaluation():
             hor_name = '%s.png' % img_name_split[0]
 
             # Perform evaluation on current image
-            rmse_t, rmse_o, rmse_u, ou_mask, tp_list, fp_list, fn_list, num_fps, \
+            rmse, num_land_detections, ou_mask, tp_list, fp_list, fn_list, num_fps, \
              tp_list_d, fp_list_d, fn_list_d, num_fps_d, \
              overlap_percentages, overlap_percentages_d = run_evaluation_image(args.data_path,
                                                                                args.segmentation_path,
@@ -163,16 +183,26 @@ def run_evaluation():
                                                                                args.method_name,
                                                                                gt['dataset']['sequences'][seq_id - 1],
                                                                                seq_id, frame_number, eval_params,
-                                                                               mapping_dict_seq)
+                                                                               mapping_dict_seq, M, D)
 
             total_overlap_percentages = total_overlap_percentages + overlap_percentages
             total_overlap_percentages_d = total_overlap_percentages_d + overlap_percentages_d
+            
+            num_oshoot_wateredge = np.sum(ou_mask == 1)
+            num_ushoot_wateredge = np.sum(ou_mask == 2)
+            
+            if num_oshoot_wateredge + num_ushoot_wateredge > 0:
+                we_o = float(num_oshoot_wateredge / (num_oshoot_wateredge + num_ushoot_wateredge))
+                we_u = float(num_ushoot_wateredge / (num_oshoot_wateredge + num_ushoot_wateredge))
+            else:
+                we_o = 0
+                we_u = 0
 
             # Add to the evaluation results
-
-            evaluation_results['sequences'][seq_id - 1]['frames'].append({"rmse_t": float(rmse_t),
-                                                                          "rmse_o": float(rmse_o),
-                                                                          "rmse_u": float(rmse_u), #"over_under_mask": ou_mask,
+            evaluation_results['sequences'][seq_id - 1]['frames'].append({"we_rmse": rmse,
+                                                                          "we_o": we_o,
+                                                                          "we_u": we_u,
+                                                                          "we_detections": num_land_detections,
                                                                           "obstacles": {"tp_list": tp_list,
                                                                                         "fp_list": fp_list,
                                                                                         "fn_list": fn_list},
@@ -183,6 +213,7 @@ def run_evaluation():
                                                                           "hor_name": hor_name
                                                                           })
 
+
             # Update quick statistics
             total_detections[0] += len(tp_list)
             total_detections[1] += num_fps
@@ -191,7 +222,10 @@ def run_evaluation():
             total_detections[4] += num_fps_d
             total_detections[5] += len(fn_list_d)
 
-            total_edge_aprox = np.column_stack((total_edge_aprox, [rmse_t, rmse_o, rmse_u]))
+            total_edge_approx.append(rmse)
+            total_over_under[0] += num_oshoot_wateredge
+            total_over_under[1] += num_ushoot_wateredge
+            total_land_detections += num_land_detections
 
         evaluation_results['sequences'][seq_id - 1]['evaluated'] = True
 
@@ -201,14 +235,22 @@ def run_evaluation():
     # Print quick statistics
     table = PrettyTable()
 
-    tmp_edge = np.ceil(np.mean(total_edge_aprox[0, :]))
-    tmp_oshot = np.mean(total_edge_aprox[1, :]) / (np.mean(total_edge_aprox[1, :]) +
-                                                   np.mean(total_edge_aprox[2, :])) * 100
-    tmp_ushot = np.mean(total_edge_aprox[2, :]) / (np.mean(total_edge_aprox[1, :]) +
-                                                   np.mean(total_edge_aprox[2, :])) * 100
+    tmp_edge = np.ceil(np.mean(total_edge_approx))
+    if np.sum(total_over_under) > 0:
+        tmp_oshot = (total_over_under[0] / (total_over_under[0] + total_over_under[1])) * 100
+        tmp_ushot = (total_over_under[1] / (total_over_under[0] + total_over_under[1])) * 100
+    else:
+        tmp_oshot = 0
+        tmp_ushot = 0
 
     wedge_line = '%d px ' + Fore.LIGHTRED_EX + '(+%.01f%%, ' + Fore.LIGHTYELLOW_EX + '-%.01f%%)' + Fore.WHITE
     wedge_line = wedge_line % (tmp_edge, tmp_oshot, tmp_ushot)
+    
+    if total_land_detections[0] + total_land_detections[1] > 0:
+        water_land_detections = '%.01f%%' % ((total_land_detections[0] / (total_land_detections[0] + 
+                                                                          total_land_detections[1])) * 100)
+    else:
+        water_land_detections = 100
 
     tp_line = Fore.LIGHTGREEN_EX + '%d (%d)' + Fore.WHITE
     tp_line = tp_line % (total_detections[0], total_detections[3])
@@ -224,8 +266,8 @@ def run_evaluation():
                                      (((2 * total_detections[3]) / (2 * total_detections[3] + total_detections[4] +
                                                                     total_detections[5])) * 100))
 
-    table.field_names = ['Water-edge RMSE', 'TPs', 'FPs', 'FNs', 'F1']
-    table.add_row([wedge_line, tp_line, fp_line, fn_line, f1_line])
+    table.field_names = ['Water-edge RMSE', 'Water-Land detections', 'TPs', 'FPs', 'FNs', 'F1']
+    table.add_row([wedge_line, water_land_detections, tp_line, fp_line, fn_line, f1_line])
 
     print(table.get_string(title="Results for method %s on %d sequence/s" % (args.method_name, len(args.sequences))))
 
@@ -237,7 +279,7 @@ def run_evaluation():
 
 # Run evaluation on a single image
 def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, gt, seq_id, frame_number,
-                         eval_params, mapping_dict_seq):
+                         eval_params, mapping_dict_seq, M, D):
     """ Reading data... """
     # Read image name:
     img_name = gt['frames'][frame_number]['image_file_name']
@@ -249,25 +291,24 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
     seq_name = mapping_dict_seq[seq_path_split[1]]
     
     # Read image
-    # print(os.path.normpath(os.path.join(data_path + seq_path, img_name)))
     img = cv2.imread(os.path.join(data_path + seq_path, img_name))
-
-    # Read horizon mask
-    # horizon_mask = cv2.imread(os.path.join(data_path, 'seq%02d' % seq_id, 'horizons',
-    #                                        gt['sequence'][frame_number]['horizon_file_name']),
-    #                           cv2.IMREAD_GRAYSCALE)
 
     # Read segmentation mask
     seg = cv2.imread(os.path.join(segmentation_path, seq_name,
                                   method_name, "%04d.png" % (frame_number*10)))
 
-    horizon_mask = cv2.imread(os.path.join(data_path, seq_path_split[1], 'imus', '%s.png' % img_name_split[0]), cv2.IMREAD_GRAYSCALE)
+    # Read horizon mask generated with imu
+    horizon_mask = cv2.imread(os.path.join(data_path, seq_path_split[1], 'imus', '%s.png' % img_name_split[0]),
+                              cv2.IMREAD_GRAYSCALE)
 
     # Read danger zone
-    danger_zone_x = gt['frames'][frame_number]['danger_zone']['x_axis']
-    danger_zone_y = gt['frames'][frame_number]['danger_zone']['y_axis']
+    #danger_zone_x = gt['frames'][frame_number]['danger_zone']['x_axis']
+    #danger_zone_y = gt['frames'][frame_number]['danger_zone']['y_axis']
     # Build danger zone mask
-    danger_zone_mask = poly2mask(danger_zone_y, danger_zone_x, (img.shape[0], img.shape[1]))
+    #danger_zone_mask = poly2mask(danger_zone_y, danger_zone_x, (img.shape[0], img.shape[1]))
+    roll = gt['frames'][frame_number]['roll']
+    pitch = gt['frames'][frame_number]['pitch']
+    danger_zone_mask = danger_zone_to_mask(roll, pitch, 0.7, 15, M, D, 1278, 958)
 
     # Code mask to labels
     seg = code_mask_to_labels(seg, seg_colors)
@@ -277,16 +318,37 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
     """ Perform the evaluation """
     # Generate obstacle mask
     obstacle_mask = generate_obstacle_mask(seg)
-    # Generate water mask
-    water_mask = generate_water_mask(seg)
+
+    """ Get connected components of obstacles """
+    # Extract connected components from the obstacle mask.
+    # The extracted blobs represent potential detections
+    obstacle_mask_labels = measure.label(obstacle_mask)
+    obstacle_region_list = measure.regionprops(obstacle_mask_labels)
+    filtered_region_list = []
+    # Delete obstacles that are smaller than threshold
+    num_regions = len(obstacle_region_list)
+    # Loop through the extracted blobs
+    for i in range(num_regions):
+        # Check if the surface area is sufficiently large enough
+        # If not, then paint over the blob with zero values (aka non-obstacle)
+        if obstacle_region_list[i].area < eval_params['area_threshold']:
+            # BBOX given in Y_TL, X_TL, Y_BR, X_BR
+            obstacle_mask_labels[obstacle_region_list[i].bbox[0]:obstacle_region_list[i].bbox[2],
+                                 obstacle_region_list[i].bbox[1]:obstacle_region_list[i].bbox[3]] = 0
+            obstacle_mask[obstacle_region_list[i].bbox[0]:obstacle_region_list[i].bbox[2],
+                          obstacle_region_list[i].bbox[1]:obstacle_region_list[i].bbox[3]] = 0
+        else:
+            filtered_region_list.append(obstacle_region_list[i])
 
     # Modify obstacle mask according to the danger-zone
-    obstacle_mask_danger = (np.logical_and(obstacle_mask, danger_zone_mask)).astype(np.uint8)
-    # water_mask_danger = (np.logical_and(water_mask, danger_zone_mask)).astype(np.uint8)
+    obstacle_mask_danger = np.logical_and(obstacle_mask, danger_zone_mask).astype(np.uint8)
+    # obstacle_mask_labels_danger = (obstacle_mask_labels * danger_zone_mask).astype(np.uint8)
 
     # Perform the evaluation of the water-edge
-    rmse_t, rmse_o, rmse_u, ou_mask, land_mask = evaluate_water_edge(gt['frames'][frame_number], water_mask,
-                                                                     eval_params)
+    rmse, num_land_detections, ou_mask, land_mask, ignore_abv_strad = evaluate_water_edge(gt['frames'][frame_number],
+                                                                                          obstacle_mask_labels,
+                                                                                          horizon_mask,
+                                                                                          eval_params)
 
     # Calculate GT mask (This is land mask with an extension of the undershot regions)
     gt_mask = (np.logical_or(land_mask, ou_mask == 2)).astype(np.uint8)
@@ -294,6 +356,13 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
     gt_mask = expand_land(gt_mask, eval_params)
     # Generate GT mask for danger zone
     gt_mask_danger = (np.logical_or(np.logical_not(danger_zone_mask), gt_mask)).astype(np.uint8)
+    
+    # plt.figure(1)
+    # plt.subplot(121)
+    # plt.imshow(ou_mask)
+    # plt.subplot(122)
+    # plt.imshow(gt_mask)
+    # plt.show()
 
     """
     plt.figure(1)
@@ -310,18 +379,19 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
     # Perform the evaluation of the obstacle detection
     tp_list, fp_list, fn_list, num_fps, overlap_percentages = detect_obstacles_modb(gt['frames'][frame_number],
                                                                                     obstacle_mask, gt_mask,
+                                                                                    ignore_abv_strad,
                                                                                     horizon_mask, eval_params)
 
     # Perform the evaluation of the obstacle detection inside the danger zone only
     tp_list_d, fp_list_d, fn_list_d, num_fps_d, overlap_perc_d = detect_obstacles_modb(gt['frames'][frame_number],
                                                                                        obstacle_mask_danger,
-                                                                                       gt_mask_danger,
+                                                                                       gt_mask_danger, ignore_abv_strad,
                                                                                        horizon_mask, eval_params,
                                                                                        danger_zone=danger_zone_mask)
 
     plt.show()
 
-    return rmse_t, rmse_o, rmse_u, ou_mask, tp_list, fp_list, fn_list, num_fps, tp_list_d, fp_list_d, fn_list_d,\
+    return rmse, num_land_detections, ou_mask, tp_list, fp_list, fn_list, num_fps, tp_list_d, fp_list_d, fn_list_d,\
            num_fps_d, overlap_percentages, overlap_perc_d
 
 
