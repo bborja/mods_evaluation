@@ -72,7 +72,7 @@ def code_labels_to_colors(segmentation_mask):
     segmentation_mask_new[:, :, 2] = segmentation_mask_new_b
 
     # Convert RGB to BGR
-    #segmentation_mask_new = cv2.cvtColor(segmentation_mask_new, cv2.COLOR_RGB2BGR)
+    # segmentation_mask_new = cv2.cvtColor(segmentation_mask_new, cv2.COLOR_RGB2BGR)
 
     return segmentation_mask_new
 
@@ -84,12 +84,12 @@ def expand_land(gt_mask, eval_params):
     # construct kernel
     
     # kernel for only horizontal expansion
-    #tmp_kernel = np.zeros((amount * 2 + 1, amount * 2 + 1), dtype=np.uint8)
-    #tmp_kernel[amount, :] = 1
+    # tmp_kernel = np.zeros((amount * 2 + 1, amount * 2 + 1), dtype=np.uint8)
+    # tmp_kernel[amount, :] = 1
     
     # kernel for both horizontal and vertical expansion
-    #tmp_kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (amount * 2 + 1, amount * 2 + 1))
-    tmp_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (amount * 2 + 1, amount * 2 + 1))
+    # tmp_kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (amount * 2 + 1, amount * 2 + 1))  # Cross Kernel
+    tmp_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (amount * 2 + 1, amount * 2 + 1))  # Ellipse Kernel
 
     gt_mask_new = cv2.dilate(gt_mask, kernel=tmp_kernel)
 
@@ -110,7 +110,7 @@ def generate_obstacle_mask(segmentation_mask, gt_obstacles):
     for i in range(num_obstacles):
         if gt_obstacles[i]['type'] == 'negative':
             tmp_bbox = gt_obstacles[i]['bbox']
-            # Overpaint this area as a non-obstacle
+            # Paint over this area as a non-obstacle label
             # Extra: Expand box a bit, otherwise some FPs still go through
             obstacle_mask[tmp_bbox[1]-10:np.min([957, tmp_bbox[3]+10]), tmp_bbox[0]-10:tmp_bbox[2]+10] = 0
     
