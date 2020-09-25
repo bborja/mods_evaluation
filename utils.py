@@ -112,7 +112,7 @@ def generate_obstacle_mask(segmentation_mask, gt_obstacles):
             tmp_bbox = gt_obstacles[i]['bbox']
             # Paint over this area as a non-obstacle label
             # Extra: Expand box a bit, otherwise some FPs still go through
-            obstacle_mask[tmp_bbox[1]-10:np.min([957, tmp_bbox[3]+10]), tmp_bbox[0]-10:tmp_bbox[2]+10] = 0
+            obstacle_mask[tmp_bbox[1]-10:np.min([segmentation_mask.shape[0], tmp_bbox[3]+10]), tmp_bbox[0]-10:tmp_bbox[2]+10] = 0
     
     return obstacle_mask
 

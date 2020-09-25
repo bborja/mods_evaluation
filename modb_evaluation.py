@@ -157,14 +157,23 @@ def run_evaluation():
         # Get calibration file name
         calib_file = 'E:/MODB/calibration-%s.yaml' % calib_id
 
-        # Read calibration file and extract calibration matrix (M) and distortion coefficients (D)
+        """ Load camera calibration file """
+        # Read calibration file
         fs = cv2.FileStorage(calib_file, cv2.FILE_STORAGE_READ)
-        M = fs.getNode("M1").mat()
-        D = fs.getNode("D1").mat()
+        M = fs.getNode("M1").mat()  # Extract calibration matrix (M)
+        D = fs.getNode("D1").mat()  # Extract distortion coefficients (D)
+
+        """ Ignore mask for camera vignette (sequences 1, 2 and 3) """
+        # Check if ignore mask is needed
+        if seq_id == 1 or seq_id == 2 or seq_id == 3:
+            # Read the ignore mask
+            ignore_mask = cv2.imread(os.path.join(args.data_path, 'mask_seq123.png'), cv2.IMREAD_GRAYSCALE)
+        else:
+            ignore_mask = None
 
         # Loop through frames in the sequence
         for frame_number in range(num_frames):               
-                
+            # Update progress bar
             print_progress_bar(frame_number + 1, num_frames,
                                prefix='Processing sequence %02d / %02d:' % (seq_index_counter + 1, len(args.sequences)),
                                suffix='Complete', length=50)
@@ -173,7 +182,7 @@ def run_evaluation():
             img_name_split = img_name.split('.')
             hor_name = '%s.png' % img_name_split[0]
 
-            # Perform evaluation on current image
+            # Perform evaluation on the current image
             rmse, num_land_detections, ou_mask, tp_list, fp_list, fn_list, num_fps, \
              tp_list_d, fp_list_d, fn_list_d, num_fps_d, \
              overlap_percentages, overlap_percentages_d = run_evaluation_image(args.data_path,
@@ -181,26 +190,29 @@ def run_evaluation():
                                                                                args.segmentation_colors,
                                                                                args.method_name,
                                                                                gt['dataset']['sequences'][seq_id - 1],
-                                                                               seq_id, frame_number, eval_params,
-                                                                               mapping_dict_seq, M, D)
+                                                                               frame_number, eval_params,
+                                                                               mapping_dict_seq, M, D,
+                                                                               ignore_mask)
 
             total_overlap_percentages = total_overlap_percentages + overlap_percentages
             total_overlap_percentages_d = total_overlap_percentages_d + overlap_percentages_d
             
             num_oshoot_wateredge = np.sum(ou_mask == 1)
             num_ushoot_wateredge = np.sum(ou_mask == 2)
-            
+
+            """
             if num_oshoot_wateredge + num_ushoot_wateredge > 0:
                 we_o = float(num_oshoot_wateredge / (num_oshoot_wateredge + num_ushoot_wateredge))
                 we_u = float(num_ushoot_wateredge / (num_oshoot_wateredge + num_ushoot_wateredge))
             else:
                 we_o = 0
                 we_u = 0
+            """
 
             # Add to the evaluation results
             evaluation_results['sequences'][seq_id - 1]['frames'].append({"we_rmse": rmse,
-                                                                          "we_o": we_o,
-                                                                          "we_u": we_u,
+                                                                          "we_o": int(num_oshoot_wateredge),
+                                                                          "we_u": int(num_ushoot_wateredge),
                                                                           "we_detections": num_land_detections,
                                                                           "obstacles": {"tp_list": tp_list,
                                                                                         "fp_list": fp_list,
@@ -211,7 +223,6 @@ def run_evaluation():
                                                                           "img_name": img_name,
                                                                           "hor_name": hor_name
                                                                           })
-
 
             # Update quick statistics
             total_detections[0] += len(tp_list)
@@ -277,9 +288,39 @@ def run_evaluation():
 
 
 # Run evaluation on a single image
-def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, gt, seq_id, frame_number,
-                         eval_params, mapping_dict_seq, M, D):
-    """ Reading data... """
+def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, gt, frame_number, eval_params,
+                         mapping_dict_seq, M, D, ignore_mask=None):
+    """ Function performs evaluation process on a single image
+        * In the evaluation process we evaluate the water-edge accuracy and obstacle detection accuracy
+
+    Input params: data_path - path to the MODB raw folder
+                  segmentation_path - path to the folder where segmentation masks for all sequences are stored
+                  seg_colors - segmentation mask colors (so we can decode them)
+                  method_name - name of the method we want to evaluate. The segmentation masks for each sequence should
+                                be stored in the parent folder of the same name as method
+                  gt - ground truth dictonary
+                  frame_number - number of frame which we evaluate
+                  eval_param - evaluation parameter values
+                  mapping_dict_seq - dictonary with mapping of sequences
+                  M - camera calibration matrix
+                  D - camera distortion coefficients vector
+
+    Output: - RMSE of the water edge
+            - vector of the number of [correctly and incorrectly] assigned water-edge pixels
+            - mask where o-shot and u-shot water-edge regions are marked
+            - list of true-positives
+            - list of false-positives
+            - list of false-negatives
+            - total number of false-positives (some detections generate more than one false-positive)
+            - list of true-positives inside the danger-zone
+            - list of false-positives inside the danger zone
+            - list of false-negatives inside the danger zone
+            - number of false-positives inside the danger zone (some detections generate more than one false-positive)
+            - list of overlapping percentages of detections and ground-truth
+            - list of overlapping percetanges of detections and ground-truth inside the danger zone
+    """
+
+    """ Reading all necessary data... """
     # Read image name:
     img_name = gt['frames'][frame_number]['image_file_name']
     img_name_split = img_name.split('.')
@@ -300,14 +341,10 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
     horizon_mask = cv2.imread(os.path.join(data_path, seq_path_split[1], 'imus', '%s.png' % img_name_split[0]),
                               cv2.IMREAD_GRAYSCALE)
 
-    # Read danger zone
-    #danger_zone_x = gt['frames'][frame_number]['danger_zone']['x_axis']
-    #danger_zone_y = gt['frames'][frame_number]['danger_zone']['y_axis']
-    # Build danger zone mask
-    #danger_zone_mask = poly2mask(danger_zone_y, danger_zone_x, (img.shape[0], img.shape[1]))
-    roll = gt['frames'][frame_number]['roll']
-    pitch = gt['frames'][frame_number]['pitch']
-    danger_zone_mask = danger_zone_to_mask(roll, pitch, 0.7, 15, M, D, 1278, 958)
+    """ Generate danger zone... """
+    roll = gt['frames'][frame_number]['roll']  # Get IMU roll
+    pitch = gt['frames'][frame_number]['pitch']  # Get IMU pitch
+    danger_zone_mask = danger_zone_to_mask(roll, pitch, 0.7, 15, M, D, 1278, 958)  # Generate binary danger-zone mask
 
     # Code mask to labels
     seg = code_mask_to_labels(seg, seg_colors)
@@ -317,6 +354,10 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
     """ Perform the evaluation """
     # Generate obstacle mask
     obstacle_mask = generate_obstacle_mask(seg, gt['frames'][frame_number]['obstacles'])
+    # Check if ignore_mask is set (this should be set only for sequences 1, 2 and 3)
+    if ignore_mask is not None:
+        # Remove all detections that occur in the ignore area
+        obstacle_mask = np.logical_and(obstacle_mask, np.logical_not(ignore_mask))
 
     """ Get connected components of obstacles """
     # Extract connected components from the obstacle mask.
@@ -339,10 +380,6 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
         else:
             filtered_region_list.append(obstacle_region_list[i])
 
-    # Modify obstacle mask according to the danger-zone
-    obstacle_mask_danger = np.logical_and(obstacle_mask, danger_zone_mask).astype(np.uint8)
-    # obstacle_mask_labels_danger = (obstacle_mask_labels * danger_zone_mask).astype(np.uint8)
-
     # Perform the evaluation of the water-edge
     rmse, num_land_detections, ou_mask, land_mask, ignore_abv_strad = evaluate_water_edge(gt['frames'][frame_number],
                                                                                           obstacle_mask_labels,
@@ -353,8 +390,6 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
     gt_mask = (np.logical_or(land_mask, ou_mask == 2)).astype(np.uint8)
     # Expand the mask left and right by 1% of an image width
     gt_mask = expand_land(gt_mask, eval_params)
-    # Generate GT mask for danger zone
-    gt_mask_danger = (np.logical_or(np.logical_not(danger_zone_mask), gt_mask)).astype(np.uint8)
     
     # plt.figure(1)
     # plt.subplot(121)
@@ -375,25 +410,22 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
     plt.imshow(gt_mask_danger)
     """
 
-    if gt['exhaustive'] == 1:
+    # Read flag if the sequence is exhaustively annotated (aka if all obstacles in the sequence are annotated)
+    if gt['exhaustive'] == 1 and gt['frames'][frame_number]['exhaustive'] == 1:
         exhaustive_annotations = True
     else:
+        # If not all obstacles in the sequence are annotated, then we shall ignore all false-positive detections,
+        # since they may belong to a non-annotated obstacle
         exhaustive_annotations = False
 
     # Perform the evaluation of the obstacle detection
-    tp_list, fp_list, fn_list, num_fps, overlap_percentages = detect_obstacles_modb(gt['frames'][frame_number],
-                                                                                    obstacle_mask, gt_mask,
-                                                                                    ignore_abv_strad,
-                                                                                    horizon_mask, eval_params,
-                                                                                    exhaustive_annotations)
-
-    # Perform the evaluation of the obstacle detection inside the danger zone only
+    tp_list, fp_list, fn_list, num_fps, overlap_percentages,\
     tp_list_d, fp_list_d, fn_list_d, num_fps_d, overlap_perc_d = detect_obstacles_modb(gt['frames'][frame_number],
-                                                                                       obstacle_mask_danger,
-                                                                                       gt_mask_danger, ignore_abv_strad,
+                                                                                       obstacle_mask, gt_mask,
+                                                                                       ignore_abv_strad,
                                                                                        horizon_mask, eval_params,
                                                                                        exhaustive_annotations,
-                                                                                       danger_zone=danger_zone_mask)
+                                                                                       danger_zone_mask)
 
     plt.show()
 

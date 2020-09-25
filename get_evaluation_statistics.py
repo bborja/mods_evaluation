@@ -53,22 +53,22 @@ def main():
     num_sequences = len(results['sequences'])
 
     # Initialize detection counters for different obstacle sizes (SIZES x 3(TP,FP,FN))
-    det_sizes = np.zeros( (len(OBSTACLE_SIZE_CLASSES) + 1, 3) )
-    det_sizes_danger = np.zeros( (len(OBSTACLE_SIZE_CLASSES) + 1, 3) )
+    det_sizes = np.zeros((len(OBSTACLE_SIZE_CLASSES) + 1, 3))
+    det_sizes_danger = np.zeros((len(OBSTACLE_SIZE_CLASSES) + 1, 3))
     # Initialize detection counters for different obstacle types (TYPES x 2(TP,FN))
-    det_types = np.zeros( (len(OBSTACLE_TYPE_CLASSES), 2) )
-    det_types_danger = np.zeros( (len(OBSTACLE_SIZE_CLASSES) + 1, 3) )
+    det_types = np.zeros((len(OBSTACLE_TYPE_CLASSES), 2))
+    det_types_danger = np.zeros((len(OBSTACLE_SIZE_CLASSES) + 1, 3))
     # Initialize detections by sequences (NUM SEQUENCES x 3(TP, FP, FN))
-    det_sequences = np.zeros( (num_sequences, 3) )
-    det_sequences_danger = np.zeros( (num_sequences, 3) )
+    det_sequences = np.zeros((num_sequences, 3))
+    det_sequences_danger = np.zeros((num_sequences, 3))
     # Initialize water edge error for each sequence (NUM SEQUENCES x 3(TP, FP, FN))
-    est_water_edge = np.zeros( (num_sequences, 3) )
+    est_water_edge = np.zeros((num_sequences, 3))
 
     # Parse results
     for seq_id in range(num_sequences):
         # Check if the current sequence was evaluated
         if results['sequences'][seq_id]['evaluated']:
-            tmp_rmse = np.zeros( (3, 1) )
+            tmp_rmse = np.zeros((3, 1))
 
             num_frames_in_sequence = len(results['sequences'][seq_id]['frames'])
             for frm in range(num_frames_in_sequence):
@@ -201,15 +201,15 @@ def main():
     x_seq_number = np.ones((num_sequences, 1))
     tmp_ax3 = plt.subplot(4, 2, 6)
     tmp_ax3.plot(x_axis_sequences, est_water_edge[:, 0], marker='', color='blue', linewidth=2, label='RMSE Total')
-    tmp_ax3.plot(x_axis_sequences, est_water_edge[:, 1], marker='', color='purple', linewidth=2, label='RMSE Overshoot')
-    tmp_ax3.plot(x_axis_sequences, est_water_edge[:, 2], marker='', color='pink', linewidth=2, label='RMSE Undershoot')
+    # tmp_ax3.plot(x_axis_sequences, est_water_edge[:, 1], marker='', color='purple', linewidth=2, label='RMSE Overshoot')
+    # tmp_ax3.plot(x_axis_sequences, est_water_edge[:, 2], marker='', color='pink', linewidth=2, label='RMSE Undershoot')
     # Average
     tmp_ax3.plot(x_axis_sequences, x_seq_number * np.mean(est_water_edge[:, 0]), marker='', color='blue', linewidth=1,
-                 linestyle='dashed')  # , label='Average RMSE Total')
-    tmp_ax3.plot(x_axis_sequences, x_seq_number * np.mean(est_water_edge[:, 1]), marker='', color='purple', linewidth=1,
-                 linestyle='dashed')  # , label='Average RMSE Overshoot')
-    tmp_ax3.plot(x_axis_sequences, x_seq_number * np.mean(est_water_edge[:, 2]), marker='', color='pink', linewidth=1,
-                 linestyle='dashed')  # , label='Average RMSE Undershoot')
+                 linestyle='dashed', label='Average RMSE')
+    # tmp_ax3.plot(x_axis_sequences, x_seq_number * np.mean(est_water_edge[:, 1]), marker='', color='purple', linewidth=1,
+    #              linestyle='dashed')  # , label='Average RMSE Overshoot')
+    # tmp_ax3.plot(x_axis_sequences, x_seq_number * np.mean(est_water_edge[:, 2]), marker='', color='pink', linewidth=1,
+    #              linestyle='dashed')  # , label='Average RMSE Undershoot')
     plt.title('Water-edge estimation per sequences')
     tmp_ax3.set_ylabel('Water-Edge error [px]')
     tmp_ax3.legend()
@@ -275,10 +275,8 @@ def main():
     table = PrettyTable()
 
     tmp_edge = np.ceil(np.mean(est_water_edge[:, 0]))
-    tmp_oshot = np.mean(est_water_edge[:, 1]) / (np.mean(est_water_edge[:, 1]) +
-                                                 np.mean(est_water_edge[:, 2])) * 100
-    tmp_ushot = np.mean(est_water_edge[:, 2]) / (np.mean(est_water_edge[:, 1]) +
-                                                 np.mean(est_water_edge[:, 2])) * 100
+    tmp_oshot = np.sum(est_water_edge[:, 1]) / (np.sum(est_water_edge[:, 1]) + np.sum(est_water_edge[:, 2])) * 100
+    tmp_ushot = np.sum(est_water_edge[:, 2]) / (np.sum(est_water_edge[:, 1]) + np.sum(est_water_edge[:, 2])) * 100
 
     wedge_line = '%d px ' + Fore.LIGHTRED_EX + '(+%.01f%%, ' + Fore.LIGHTYELLOW_EX + '-%.01f%%)' + Fore.WHITE
     wedge_line = wedge_line % (tmp_edge, tmp_oshot, tmp_ushot)
@@ -298,7 +296,7 @@ def main():
                                                              np.sum(det_sequences_danger[:, 1]) +
                                                              np.sum(det_sequences_danger[:, 2])) * 100
 
-    f1_line = '%.01f%% (%.01f%%)' % (np.mean(f1_score), 0)  #f1_score_d)
+    f1_line = '%.01f%% (%.01f%%)' % (np.mean(f1_score), np.mean(f1_score_d))
 
     table.field_names = ['Water-edge RMSE', 'TPs', 'FPs', 'FNs', 'F1']
     table.add_row([wedge_line, tp_line, fp_line, fn_line, f1_line])
