@@ -148,8 +148,9 @@ def plot_detection_rectangles(ax, results, list_name, sequence, frame):
                                         tmp_bbox[3] - tmp_bbox[1],
                                         linewidth=1, edgecolor='black', facecolor=edge_color, alpha=0.45)
 
-            ax.text(tmp_bbox[0], tmp_bbox[1], results_detection[detection_type][list_name][i]['type'] +
-                    '-%d%%' % results_detection[detection_type][list_name][i]['coverage'], fontsize=6)
+            # Show overlap percentages
+            # ax.text(tmp_bbox[0], tmp_bbox[1], results_detection[detection_type][list_name][i]['type'] +
+            #         '-%d%%' % results_detection[detection_type][list_name][i]['coverage'], fontsize=6)
         else:
             rect_fg = patches.Rectangle((tmp_bbox[0], tmp_bbox[1]), tmp_bbox[2] - tmp_bbox[0],
                                         tmp_bbox[3] - tmp_bbox[1],

@@ -9,9 +9,14 @@ from prettytable import PrettyTable
 from colorama import Fore, Back, Style
 from colorama import init
 from datetime import datetime
+from danger_zone import plane_from_IMU, danger_zone_to_mask
 
 from scipy.stats import norm
 from sklearn.neighbors import KernelDensity
+
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
 
 # Path to the MODB dataset
 DATA_PATH = "E:/MODB/raw"
@@ -37,8 +42,8 @@ def get_dataset_statistics():
     args.data_path = os.path.normpath(args.data_path)
 
     # Load danger zone masks
-    danger_zone_15 = cv2.imread('E:/MODB/danger_zone_15.png', cv2.IMREAD_GRAYSCALE)
-    danger_zone_30 = cv2.imread('E:/MODB/danger_zone_30.png', cv2.IMREAD_GRAYSCALE)
+    # danger_zone_15 = cv2.imread('E:/MODB/danger_zone_15.png', cv2.IMREAD_GRAYSCALE)
+    # danger_zone_30 = cv2.imread('E:/MODB/danger_zone_30.png', cv2.IMREAD_GRAYSCALE)
 
     # Read ground truth file
     with open(os.path.normpath(os.path.join(args.data_path, 'modb.json'))) as f:
@@ -71,7 +76,28 @@ def get_dataset_statistics():
         # Get number of annotated frames inside the sequence
         tmp_num_frames = gt['dataset']['sequences'][seq_num]['num_frames']
         # Loop through the frames inside the sequence
+
+        # Get sequence path
+        seq_path = gt['dataset']['sequences'][seq_num - 1]['path']
+        # Strip path and get sequence name
+        seq_name = seq_path.rstrip().split('/')[1]
+        calib_id = seq_name.split('-')[0]
+        # Get calibration file name
+        calib_file = 'E:/MODB/calibration-%s.yaml' % calib_id
+
+        """ Load camera calibration file """
+        # Read calibration file
+        fs = cv2.FileStorage(calib_file, cv2.FILE_STORAGE_READ)
+        M = fs.getNode("M1").mat()  # Extract calibration matrix (M)
+        D = fs.getNode("D1").mat()  # Extract distortion coefficients (D)
+
         for fr_num in range(tmp_num_frames):
+            """ Generate danger zone... """
+            roll = gt['dataset']['sequences'][seq_num]['frames'][fr_num]['roll']  # Get IMU roll
+            pitch = gt['dataset']['sequences'][seq_num]['frames'][fr_num]['pitch']  # Get IMU pitch
+            danger_zone_15 = danger_zone_to_mask(roll, pitch, 0.7, 15, M, D, 1278, 958)  # 15m
+            danger_zone_30 = danger_zone_to_mask(roll, pitch, 0.7, 30, M, D, 1278, 958)  # 30m
+
             tmp_obstacles = gt['dataset']['sequences'][seq_num]['frames'][fr_num]['obstacles']
             tmp_wateredge = gt['dataset']['sequences'][seq_num]['frames'][fr_num]['water_edges']
 
@@ -81,8 +107,11 @@ def get_dataset_statistics():
             num_wateredges += tmp_num_wateredge
             
             #if gt['dataset']['sequences'][seq_num]['frames'][fr_num]['all_annotations'] == 'true':
-            if gt['dataset']['sequences'][seq_num]['exhaustive']:
-                tmp_all_annotations = True
+            if 'exhaustive' in gt['dataset']['sequences'][seq_num]['frames'][fr_num].keys():
+                if gt['dataset']['sequences'][seq_num]['frames'][fr_num]['exhaustive']:
+                    tmp_all_annotations = True
+                else:
+                    tmp_all_annotations = False
             else:
                 tmp_all_annotations = False
 
@@ -91,11 +120,11 @@ def get_dataset_statistics():
             else:
                 num_images_wateredge[1] += 1
 
-            if tmp_num_obstacles > 0 and tmp_all_annotations:
+            if tmp_num_obstacles > 0 and tmp_all_annotations == True:
                 num_images_obstacles[0] += 1
-            elif tmp_num_obstacles > 0 and tmp_all_annotations is False:
+            elif tmp_num_obstacles > 0 and tmp_all_annotations == False:
                 num_images_obstacles[1] += 1
-            else:
+            elif tmp_num_obstacles == 0:
                 num_images_obstacles[2] += 1
 
             for obs_num in range(tmp_num_obstacles):
@@ -149,7 +178,7 @@ def get_dataset_statistics():
 
         print('Sequence %02d / %02d finished.' % (seq_num, num_sequences))
 
-    explode_2 = (0.1, 0)  # Only explode slice belonging to the TPs
+    explode_2 = (0.1, 0.1)  # Only explode slice belonging to the TPs
     explode_3_1 = (0.1, 0.1, 0.1)
     explode_3_2 = (0.1, 0.1, 0)
     pie_chart_obstacles1_labels = ['Images with obstacles', 'Images without all obstacles annotated', 'Images without obstacles']
@@ -220,13 +249,13 @@ def get_dataset_statistics():
     plt.figure(3)
     plt.clf()
     plt.subplot(131)
-    plt.imshow(heat_mask_v, cmap='Blues')
+    plt.imshow(heat_mask_v, cmap='Oranges')
     plt.title('Heat mask for vessels')
     plt.subplot(132)
-    plt.imshow(heat_mask_o, cmap='Blues')
+    plt.imshow(heat_mask_o, cmap='Oranges')
     plt.title('Heat mask for other')
     plt.subplot(133)
-    plt.imshow(heat_mask_p, cmap='Blues')
+    plt.imshow(heat_mask_p, cmap='Oranges')
     plt.title('Heat mask for person')
     
     plt.show()
