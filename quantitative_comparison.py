@@ -86,7 +86,7 @@ def main():
 
     fig.subplots_adjust(wspace=0.25, hspace=0.20, top=0.85, bottom=0.05)
 
-    colors = ['tab:blue', 'tab:orange', 'tab:purple', 'tab:olive', 'tab:pink']  # Colors for top-five performing methods
+    colors = ['tab:blue', 'tab:orange', 'tab:purple', 'tab:pink', 'tab:olive']  # Colors for top-five performing methods
 
     print(data)
 
