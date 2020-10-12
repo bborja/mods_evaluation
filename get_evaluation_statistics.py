@@ -273,6 +273,7 @@ def main():
 
     # Print brief statistics
     table = PrettyTable()
+    table_sizes = PrettyTable()
 
     tmp_edge = np.ceil(np.mean(est_water_edge[:, 0]))
     tmp_oshot = np.sum(est_water_edge[:, 1]) / (np.sum(est_water_edge[:, 1]) + np.sum(est_water_edge[:, 2])) * 100
@@ -302,6 +303,23 @@ def main():
     table.add_row([wedge_line, tp_line, fp_line, fn_line, f1_line])
 
     print(table.get_string(title="Results for method %s on %d sequence/s" % (args.method_name, num_sequences)))
+
+    table_sizes.field_names = ['tiny', 'very small', 'small', 'medium', 'large', 'very large']
+    table_sizes.add_row(['%.01f' % (100 * det_sizes[0, 0] / (det_sizes[0, 0] + det_sizes[0, 2])),
+                         '%.01f' % (100 * det_sizes[1, 0] / (det_sizes[1, 0] + det_sizes[1, 2])),
+                         '%.01f' % (100 * det_sizes[2, 0] / (det_sizes[2, 0] + det_sizes[2, 2])),
+                         '%.01f' % (100 * det_sizes[3, 0] / (det_sizes[3, 0] + det_sizes[3, 2])),
+                         '%.01f' % (100 * det_sizes[4, 0] / (det_sizes[4, 0] + det_sizes[4, 2])),
+                         '%.01f' % (100 * det_sizes[5, 0] / (det_sizes[5, 0] + det_sizes[5, 2]))])
+
+    table_sizes.add_row(['%.01f' % (100 * det_sizes[0, 1] / (det_sizes[0, 0] + det_sizes[0, 1])),
+                         '%.01f' % (100 * det_sizes[1, 1] / (det_sizes[1, 0] + det_sizes[1, 1])),
+                         '%.01f' % (100 * det_sizes[2, 1] / (det_sizes[2, 0] + det_sizes[2, 1])),
+                         '%.01f' % (100 * det_sizes[3, 1] / (det_sizes[3, 0] + det_sizes[3, 1])),
+                         '%.01f' % (100 * det_sizes[4, 1] / (det_sizes[4, 0] + det_sizes[4, 1])),
+                         '%.01f' % (100 * det_sizes[5, 1] / (det_sizes[5, 0] + det_sizes[5, 1]))])
+
+    print(table_sizes.get_string(title="Detections based on sizes"))
     
     plt.show()
 
