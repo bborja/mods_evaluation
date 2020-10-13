@@ -65,6 +65,7 @@ def main():
     est_water_edge = np.zeros((num_sequences, 3))
 
     # Parse results
+    debug_all_detection = 0
     for seq_id in range(num_sequences):
         # Check if the current sequence was evaluated
         if results['sequences'][seq_id]['evaluated']:
@@ -79,6 +80,7 @@ def main():
                                                       1, det_sizes)
                 det_sizes = update_detection_by_sizes(results['sequences'][seq_id]['frames'][frm]['obstacles']['fn_list'],
                                                       2, det_sizes)
+                debug_all_detection += len(results['sequences'][seq_id]['frames'][frm]['obstacles']['tp_list'])
 
                 det_sizes_danger = update_detection_by_sizes(results['sequences'][seq_id]['frames'][frm]['obstacles_danger']['tp_list'],
                                                              0, det_sizes_danger)
@@ -116,6 +118,7 @@ def main():
             est_water_edge[seq_id, 1] = tmp_rmse[1]
             est_water_edge[seq_id, 2] = tmp_rmse[2]
 
+    print(debug_all_detection)
     # Plot sizes detection rate
     fig = plt.figure(1, figsize=(15, 10))
     fig.tight_layout()
@@ -274,6 +277,7 @@ def main():
     # Print brief statistics
     table = PrettyTable()
     table_sizes = PrettyTable()
+    table_sizes_danger = PrettyTable()
 
     tmp_edge = np.ceil(np.mean(est_water_edge[:, 0]))
     tmp_oshot = np.sum(est_water_edge[:, 1]) / (np.sum(est_water_edge[:, 1]) + np.sum(est_water_edge[:, 2])) * 100
@@ -304,22 +308,61 @@ def main():
 
     print(table.get_string(title="Results for method %s on %d sequence/s" % (args.method_name, num_sequences)))
 
-    table_sizes.field_names = ['tiny', 'very small', 'small', 'medium', 'large', 'very large']
-    table_sizes.add_row(['%.01f' % (100 * det_sizes[0, 0] / (det_sizes[0, 0] + det_sizes[0, 2])),
-                         '%.01f' % (100 * det_sizes[1, 0] / (det_sizes[1, 0] + det_sizes[1, 2])),
-                         '%.01f' % (100 * det_sizes[2, 0] / (det_sizes[2, 0] + det_sizes[2, 2])),
-                         '%.01f' % (100 * det_sizes[3, 0] / (det_sizes[3, 0] + det_sizes[3, 2])),
-                         '%.01f' % (100 * det_sizes[4, 0] / (det_sizes[4, 0] + det_sizes[4, 2])),
-                         '%.01f' % (100 * det_sizes[5, 0] / (det_sizes[5, 0] + det_sizes[5, 2]))])
+    tp_rate = np.full((6, 2), -1.)
+    fp_rate = np.full((6, 2), -1.)
+    print(det_sizes)
+    for i in range(6):
+        tmp = det_sizes[i+1, 0] + det_sizes[i+1, 2]
+        if tmp > 0:
+            tp_rate[i, 0] = 100 * det_sizes[i+1, 0] / (det_sizes[i+1, 0] + det_sizes[i+1, 2])
 
-    table_sizes.add_row(['%.01f' % (100 * det_sizes[0, 1] / (det_sizes[0, 0] + det_sizes[0, 1])),
-                         '%.01f' % (100 * det_sizes[1, 1] / (det_sizes[1, 0] + det_sizes[1, 1])),
-                         '%.01f' % (100 * det_sizes[2, 1] / (det_sizes[2, 0] + det_sizes[2, 1])),
-                         '%.01f' % (100 * det_sizes[3, 1] / (det_sizes[3, 0] + det_sizes[3, 1])),
-                         '%.01f' % (100 * det_sizes[4, 1] / (det_sizes[4, 0] + det_sizes[4, 1])),
-                         '%.01f' % (100 * det_sizes[5, 1] / (det_sizes[5, 0] + det_sizes[5, 1]))])
+        tmp = det_sizes[i+1, 0] + det_sizes[i+1, 1]
+        if tmp > 0:
+            fp_rate[i, 0] = 100 * det_sizes[i+1, 1] / (det_sizes[i+1, 0] + det_sizes[i+1, 1])
+
+        tmp = det_sizes_danger[i+1, 0] + det_sizes_danger[i+1, 2]
+        if tmp > 0:
+            tp_rate[i, 1] = 100 * det_sizes_danger[i+1, 0] / (det_sizes_danger[i+1, 0] + det_sizes_danger[i+1, 2])
+
+        tmp = det_sizes_danger[i+1, 0] + det_sizes_danger[i+1, 1]
+        if tmp > 0:
+            fp_rate[i, 1] = 100 * det_sizes_danger[i+1, 1] / (det_sizes_danger[i+1, 0] + det_sizes_danger[i+1, 1])
+
+    # Detection sizes numbers
+    table_sizes.field_names = ['tiny', 'very small', 'small', 'medium', 'large', 'very large']
+    table_sizes.add_row(['%.01f' % tp_rate[0, 0],
+                         '%.01f' % tp_rate[1, 0],
+                         '%.01f' % tp_rate[2, 0],
+                         '%.01f' % tp_rate[3, 0],
+                         '%.01f' % tp_rate[4, 0],
+                         '%.01f' % tp_rate[5, 0]])
+
+    table_sizes.add_row(['%.01f' % fp_rate[0, 0],
+                         '%.01f' % fp_rate[1, 0],
+                         '%.01f' % fp_rate[2, 0],
+                         '%.01f' % fp_rate[3, 0],
+                         '%.01f' % fp_rate[4, 0],
+                         '%.01f' % fp_rate[5, 0]])
 
     print(table_sizes.get_string(title="Detections based on sizes"))
+
+    # Detection sizes numbers within danger zone
+    table_sizes_danger.field_names = ['tiny', 'very small', 'small', 'medium', 'large', 'very large']
+    table_sizes_danger.add_row(['%.01f' % tp_rate[0, 1],
+                                '%.01f' % tp_rate[1, 1],
+                                '%.01f' % tp_rate[2, 1],
+                                '%.01f' % tp_rate[3, 1],
+                                '%.01f' % tp_rate[4, 1],
+                                '%.01f' % tp_rate[5, 1]])
+
+    table_sizes_danger.add_row(['%.01f' % fp_rate[0, 1],
+                                '%.01f' % fp_rate[1, 1],
+                                '%.01f' % fp_rate[2, 1],
+                                '%.01f' % fp_rate[3, 1],
+                                '%.01f' % fp_rate[4, 1],
+                                '%.01f' % fp_rate[5, 1]])
+
+    print(table_sizes_danger.get_string(title="Detections within danger zone based on sizes"))
     
     plt.show()
 
@@ -345,19 +388,32 @@ def update_detection_by_sizes(det_list, type_index, det_sizes):
     # type_index: 0 = TP, 1 = FP, 2 = FN
     num_detections = len(det_list)
     for i in range(num_detections):
-        det_area = det_list[i]['area']
-        for j in range(len(OBSTACLE_SIZE_CLASSES) + 1):
-            if j == 0 and det_area <= OBSTACLE_SIZE_CLASSES[j]:
-                if type_index == 1:
-                    det_sizes[j, type_index] += det_list[i]['num_triggers']
-                else:
-                    det_sizes[j, type_index] += 1
-            elif j == len(OBSTACLE_SIZE_CLASSES) and det_area > OBSTACLE_SIZE_CLASSES[j-1]:
-                if type_index == 1:
-                    det_sizes[j, type_index] += det_list[i]['num_triggers']
-                else:
-                    det_sizes[j, type_index] += 1
-            elif OBSTACLE_SIZE_CLASSES[j - 1] < det_area <= OBSTACLE_SIZE_CLASSES[j]:
+        # get detection size
+        if type_index == 1:
+            det_area = det_list[i]['area']
+        else:
+            tmp_bb = det_list[i]['bbox']
+            det_area = (tmp_bb[3] - tmp_bb[1]) * (tmp_bb[2] - tmp_bb[0])
+
+        # check to which size class it belongs
+
+        # if it is smaller or equal than the smallest size
+        if det_area < OBSTACLE_SIZE_CLASSES[0]:
+            if type_index == 1:
+                det_sizes[0, type_index] += det_list[i]['num_triggers']
+            else:
+                det_sizes[0, type_index] += 1
+
+        # if it is larger than the largest size
+        if det_area >= OBSTACLE_SIZE_CLASSES[-1]:
+            if type_index == 1:
+                det_sizes[-1, type_index] += det_list[i]['num_triggers']
+            else:
+                det_sizes[-1, type_index] += 1
+
+        # if it is in-between
+        for j in range(1, len(OBSTACLE_SIZE_CLASSES)):
+            if OBSTACLE_SIZE_CLASSES[j - 1] <= det_area < OBSTACLE_SIZE_CLASSES[j]:
                 if type_index == 1:
                     det_sizes[j, type_index] += det_list[i]['num_triggers']
                 else:
