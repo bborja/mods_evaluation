@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 
 
 # Function performs obstacle detection evaluation and return a list of TP, FP and FN detections with their BBoxes
-def detect_obstacles_modb(gt, obstacle_mask, gt_mask, ignore_abv_strad, horizon_mask, eval_params, exhaustive,
-                          danger_zone):
+def detect_obstacles_modb(gt, gt_coverage, obstacle_mask, gt_mask, ignore_abv_strad, horizon_mask, eval_params,
+                          exhaustive, danger_zone):
 
     # Filter GT obstacle annotations - keep only those that are inside the danger zone mask
     # if danger_zone is not None:
@@ -18,8 +18,8 @@ def detect_obstacles_modb(gt, obstacle_mask, gt_mask, ignore_abv_strad, horizon_
     # Perform the detections
     # - Detect TPs and FNs (both inside and outside the danger zone)
     tp_list, fn_list, overlap_percentages_list, \
-        tp_list_d, fn_list_d, overlap_percentages_list_d = check_tp_detections(gt, obstacle_mask, danger_zone,
-                                                                               eval_params)
+        tp_list_d, fn_list_d, overlap_percentages_list_d = check_tp_detections(gt, gt_coverage, obstacle_mask,
+                                                                               danger_zone, eval_params)
 
     gt_obstacles_list = np.append(tp_list, fn_list)
 
@@ -45,7 +45,7 @@ def detect_obstacles_modb(gt, obstacle_mask, gt_mask, ignore_abv_strad, horizon_
 
 
 # Function checks TP detections (and consequently FN detections as well)
-def check_tp_detections(gt, obstacle_mask_filtered, danger_zone, eval_params):
+def check_tp_detections(gt, gt_coverage, obstacle_mask_filtered, danger_zone, eval_params):
     # Initialize arrays
     # (Arrays will be of size n x 4, where each row is in format: x_TL,y_TL,x_BR,y_BR)
     # TL = top-left, BR = bottom-right
@@ -62,12 +62,19 @@ def check_tp_detections(gt, obstacle_mask_filtered, danger_zone, eval_params):
 
     # Get number of filtered obstacles
     num_gt_obstacles = len(gt['obstacles'])
+    num_gt_obstacles_cover = len(gt_coverage['obstacles'])
 
     # Check for overlap between filtered ground truth annotations and filtered detections
     for i in range(num_gt_obstacles):
         # Check if obstacle is sufficiently large
         # gt_area_surface = compute_surface_area(gt['obstacles'][i]['bbox'])
         gt_area_surface = gt['obstacles'][i]['area']
+
+        # Sanity check (dextr coverage):
+        #if gt['obstacles'][i]['id'] == gt_coverage['obstacles'][i]['id']:
+        #    print('all good in the hood')
+        #else:
+        #    print('there are many soci-economic problems in the hood')
 
         if gt_area_surface >= eval_params['area_threshold'] and gt['obstacles'][i]['type'] != 'negative':
             # Get current GT obstacle bounding-box
@@ -87,8 +94,26 @@ def check_tp_detections(gt, obstacle_mask_filtered, danger_zone, eval_params):
             # Check the coverage of the danger zone area (if the sum is non-zero, then the obstacle is located in d-z)
             num_dangerzone_pixels = np.sum(danger_zone_mask_area)
 
-            # Check if enough area is covered by an obstacle to be considered a TP detection
-            correctly_covered_percentage = num_correctly_detected_pixels / gt_area_surface
+            # Dextr coverage...
+            is_coverage_computed = False
+            for i_c in range(num_gt_obstacles_cover):
+                if gt['obstacles'][i]['id'] == gt_coverage['obstacles'][i_c]['id']:
+                    is_coverage_computed = True
+                    break
+
+            if is_coverage_computed:
+                # Get percentage of obstacle above water edge
+                p_above_we = gt_coverage['obstacles'][i_c]['p_above_water_edge']
+                # Get dextr obstacle coverage
+                expected_coverage = gt_coverage['obstacles'][i_c]['expected_coverage']
+
+                # Check if enough area is covered by an obstacle to be considered a TP detection
+                if p_above_we < 0.8 and gt_area_surface > 250:
+                    correctly_covered_percentage = num_correctly_detected_pixels / (gt_area_surface * expected_coverage)
+                else:
+                    correctly_covered_percentage = num_correctly_detected_pixels / gt_area_surface
+            else:
+                correctly_covered_percentage = num_correctly_detected_pixels / gt_area_surface
 
             # append the overlap percentage with information of the current obstacle...
             if correctly_covered_percentage >= 0.1:

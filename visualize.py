@@ -73,9 +73,9 @@ def main():
 
     gt = read_gt_file(os.path.join(args.data_path, 'modb.json'))
 
-    if args.frame is not None and len(args.frame) == 1:
+    if args.frame is not None and isinstance(args.frame, int):
         if args.sequences is not None and len(args.sequences) == 1:
-
+            seq_id = args.sequences[0]
             if not os.path.exists(os.path.join(args.output_path, args.method_name, 'seq%02d' % seq_id)):
                 os.mkdir(os.path.join(args.output_path, args.method_name, 'seq%02d' % seq_id))
                 os.mkdir(os.path.join(args.output_path, args.method_name, 'seq%02d' % seq_id, 'tmp_frames'))
@@ -83,26 +83,28 @@ def main():
             # Load image
             seq_path = gt['dataset']['sequences'][seq_id - 1]['path']
             img = cv2.imread(os.path.join(args.data_path, seq_path,
-                                          results['sequences'][args.sequences-1]['frames'][args.frame-1]['img_name']))
+                                          results['sequences'][seq_id-1]['frames'][args.frame-1]['img_name']))
             
             # Load segmentation output
-            seg = cv2.imread(os.path.join(args.segmentation_path, 'seq%02d' % args.sequences, args.method_name,
-                                          'mask_%03d.png' % args.frame))
+            seg = cv2.imread(os.path.join(args.segmentation_path, 'seq%02d' % seq_id, args.method_name, '%04d.png' % (args.frame * 10)))
+            print(os.path.join(args.segmentation_path, 'seq%02d' % seq_id, args.method_name, '%04d.png' % args.frame))
+                                          #'mask_%03d.png' % args.frame))
 
             # Over/Under mask
-            ou_mask = results['sequences'][args.sequences-1]['frames'][args.frame]['over_under_mask']
+            #ou_mask = results['sequences'][seq_id-1]['frames'][args.frame]['over_under_mask']
 
             # Code mask to labels
+            print(seg.shape)
             seg = code_mask_to_labels(seg, args.segmentation_colors)
             # Update segmentation mask with the over/under mask
-            seg[ou_mask == 1] = 3
-            seg[ou_mask == 2] = 4
+            #seg[ou_mask == 1] = 3
+            #seg[ou_mask == 2] = 4
             # Code labels to colors
             seg = code_labels_to_colors(seg)
 
             # Visualize image
-            visualize_single_image(img, seg, results['sequences'][args.sequences-1]['frames'][args.frame],
-                                   gt['dataset']['sequences'][seq_id-1]['frames'][fr_id])
+            visualize_single_image(img, seg, results['sequences'][seq_id-1]['frames'][args.frame],
+                                   gt['dataset']['sequences'][seq_id-1]['frames'][args.frame])
 
         else:
             print('<Error>: Sequence not specified or more than one sequence given!')
@@ -162,7 +164,7 @@ def main():
                     fig1 = visualize_image_for_video(img, seg, seg_ou, results['sequences'][seq_id-1]['frames'][fr_id],
                                                      gt['dataset']['sequences'][seq_id-1]['frames'][fr_id])
 
-                    if args.export_video:
+                    if True:  #args.export_video:
                         fig1.savefig(os.path.join(args.output_path, args.method_name, 'seq%02d' % seq_id, 'tmp_frames', '%08d.png' % fr_id))
                     else:
                         plt.show()
@@ -176,8 +178,8 @@ def main():
         
         if args.export_video:
             # Export frames to video
-            cmd = ['ffmpeg', '-i', os.path.join(args.output_path, args.method_name, 'seq%02d' % seq_id, 'tmp_frames', '%08d.png'),
-                   '-r', '10', os.path.join(args.output_path, args.method_name, 'sequence_%02d.mp4' % seq_id)]
+            cmd = ['ffmpeg', '-r', '2', '-i', os.path.join(args.output_path, args.method_name, 'seq%02d' % seq_id, 'tmp_frames', '%08d.png'),
+                   '-r', '30', os.path.join(args.output_path, args.method_name, 'sequence_%02d.mp4' % seq_id)]
 
             ret_code = subprocess.call(cmd)
             if not ret_code == 0:

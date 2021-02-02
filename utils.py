@@ -183,12 +183,15 @@ def poly2mask(row_coordinates, col_coordinates, shape):
 
 
 # Function reads ground truth txt file and parses it into appropriate format for further use
-def read_gt_file(txt_path):
+def read_gt_file(txt_path, is_coverage_file=False):
     # Read ground-truth JSON file
     with open(txt_path) as f:
         data = json.load(f)
 
-    return prepare_gt_obs_annotations(data)
+    if is_coverage_file:
+        return data
+    else:
+        return prepare_gt_obs_annotations(data)
 
 
 # Function writes results to JSON file

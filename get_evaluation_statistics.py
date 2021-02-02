@@ -62,14 +62,14 @@ def main():
     det_sequences = np.zeros((num_sequences, 3))
     det_sequences_danger = np.zeros((num_sequences, 3))
     # Initialize water edge error for each sequence (NUM SEQUENCES x 3(TP, FP, FN))
-    est_water_edge = np.zeros((num_sequences, 3))
+    est_water_edge = np.zeros((num_sequences, 5))
 
     # Parse results
     debug_all_detection = 0
     for seq_id in range(num_sequences):
         # Check if the current sequence was evaluated
         if results['sequences'][seq_id]['evaluated']:
-            tmp_rmse = np.zeros((3, 1))
+            tmp_rmse = np.zeros((5, 1))
 
             num_frames_in_sequence = len(results['sequences'][seq_id]['frames'])
             for frm in range(num_frames_in_sequence):
@@ -113,12 +113,15 @@ def main():
                 tmp_rmse[0] += results['sequences'][seq_id]['frames'][frm]['we_rmse']
                 tmp_rmse[1] += results['sequences'][seq_id]['frames'][frm]['we_o']
                 tmp_rmse[2] += results['sequences'][seq_id]['frames'][frm]['we_u']
+                tmp_rmse[3] += results['sequences'][seq_id]['frames'][frm]['we_detections'][0]
+                tmp_rmse[4] += results['sequences'][seq_id]['frames'][frm]['we_detections'][1]
 
             est_water_edge[seq_id, 0] = tmp_rmse[0] / num_frames_in_sequence
             est_water_edge[seq_id, 1] = tmp_rmse[1]
             est_water_edge[seq_id, 2] = tmp_rmse[2]
+            est_water_edge[seq_id, 3] = tmp_rmse[3]
+            est_water_edge[seq_id, 4] = tmp_rmse[4]
 
-    print(debug_all_detection)
     # Plot sizes detection rate
     fig = plt.figure(1, figsize=(15, 10))
     fig.tight_layout()
@@ -278,13 +281,15 @@ def main():
     table = PrettyTable()
     table_sizes = PrettyTable()
     table_sizes_danger = PrettyTable()
+    table_ratios = PrettyTable()
 
     tmp_edge = np.ceil(np.mean(est_water_edge[:, 0]))
+    tmp_we_percentage = (np.sum(est_water_edge[:, 3]) / (np.sum(est_water_edge[:, 3]) + np.sum(est_water_edge[:, 4]))) * 100
     tmp_oshot = np.sum(est_water_edge[:, 1]) / (np.sum(est_water_edge[:, 1]) + np.sum(est_water_edge[:, 2])) * 100
     tmp_ushot = np.sum(est_water_edge[:, 2]) / (np.sum(est_water_edge[:, 1]) + np.sum(est_water_edge[:, 2])) * 100
 
-    wedge_line = '%d px ' + Fore.LIGHTRED_EX + '(+%.01f%%, ' + Fore.LIGHTYELLOW_EX + '-%.01f%%)' + Fore.WHITE
-    wedge_line = wedge_line % (tmp_edge, tmp_oshot, tmp_ushot)
+    wedge_line = '%d px (%0.1f)' + Fore.LIGHTRED_EX + '(+%.01f%%, ' + Fore.LIGHTYELLOW_EX + '-%.01f%%)' + Fore.WHITE
+    wedge_line = wedge_line % (tmp_edge, tmp_we_percentage, tmp_oshot, tmp_ushot)
 
     tp_line = Fore.LIGHTGREEN_EX + '%d (%d)' + Fore.WHITE
     tp_line = tp_line % (np.sum(det_sequences[:, 0]), np.sum(det_sequences_danger[:, 0]))
@@ -310,7 +315,8 @@ def main():
 
     tp_rate = np.full((6, 2), -1.)
     fp_rate = np.full((6, 2), -1.)
-    print(det_sizes)
+    ratios = np.zeros((8, 2), dtype=np.float64)
+    #print(det_sizes)
     for i in range(6):
         tmp = det_sizes[i+1, 0] + det_sizes[i+1, 2]
         if tmp > 0:
@@ -327,6 +333,9 @@ def main():
         tmp = det_sizes_danger[i+1, 0] + det_sizes_danger[i+1, 1]
         if tmp > 0:
             fp_rate[i, 1] = 100 * det_sizes_danger[i+1, 1] / (det_sizes_danger[i+1, 0] + det_sizes_danger[i+1, 1])
+
+        ratios[i, 0] = 100 * (det_sizes_danger[i+1, 0] + det_sizes_danger[i+1, 2]) / (det_sizes[i+1, 0] + det_sizes[i+1, 2])
+        ratios[i, 1] = 100 * (det_sizes_danger[i+1, 1]) / (det_sizes[i+1, 1])
 
     # Detection sizes numbers
     table_sizes.field_names = ['tiny', 'very small', 'small', 'medium', 'large', 'very large']
@@ -363,6 +372,26 @@ def main():
                                 '%.01f' % fp_rate[5, 1]])
 
     print(table_sizes_danger.get_string(title="Detections within danger zone based on sizes"))
+
+    # Ratios between detections within danger zone and whole screen
+    table_ratios.field_names = ['tiny', 'very small', 'small', 'medium', 'large', 'very large']
+    table_ratios.add_row(['%.01f' % ratios[0, 0],
+                          '%.01f' % ratios[1, 0],
+                          '%.01f' % ratios[2, 0],
+                          '%.01f' % ratios[3, 0],
+                          '%.01f' % ratios[4, 0],
+                          '%.01f' % ratios[5, 0]])
+
+    table_ratios.add_row(['%.01f' % ratios[0, 1],
+                          '%.01f' % ratios[1, 1],
+                          '%.01f' % ratios[2, 1],
+                          '%.01f' % ratios[3, 1],
+                          '%.01f' % ratios[4, 1],
+                          '%.01f' % ratios[5, 1]])
+
+    print(table_ratios.get_string(title="Rations between detections within danger zone and all screen"))
+
+    #print(det_sizes_danger)
     
     plt.show()
 

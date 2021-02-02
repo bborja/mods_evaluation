@@ -175,7 +175,7 @@ def evaluate_water_edge(gt, obstacle_mask_labels, horizon_mask, eval_params):
                     # Check in the DT mask how far the nearest lower-bound of obstacle annotation is located
                     tmp_error = dtf_detected_water_edge[tmp_y_coord, tmp_x_coord]
                     # If such location is further is than 40 pixels, then we treat this as incorrect detection
-                    if tmp_error > 40:
+                    if tmp_error > 20: #40: #20: (changed 23.1.2020) #40:  40 - for mu_r and 20 for mu_a
                         # The root-mean-squared-error (aka the distance to the detection) is set to the highest possible
                         # (half of the image height) in order to punish missed detection, while the pixel located at
                         # current x position is considered as FN
