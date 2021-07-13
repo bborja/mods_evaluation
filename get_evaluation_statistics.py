@@ -291,32 +291,64 @@ def main():
 
     #tmp_edge = np.ceil(np.mean(est_water_edge[:, 1]))
     tmp_edge = np.ceil(np.sum(est_water_edge[:, 0]) / num_frames_total)
-    tmp_we_percentage = (np.sum(est_water_edge[:, 4]) / (np.sum(est_water_edge[:, 4]) + np.sum(est_water_edge[:, 5]))) * 100
-    tmp_oshot = np.sum(est_water_edge[:, 2]) / (np.sum(est_water_edge[:, 2]) + np.sum(est_water_edge[:, 3])) * 100
-    tmp_ushot = np.sum(est_water_edge[:, 3]) / (np.sum(est_water_edge[:, 2]) + np.sum(est_water_edge[:, 3])) * 100
+    tmp_we_percentage = (np.sum(est_water_edge[:, 4]) / (np.sum(est_water_edge[:, 4]) + np.sum(est_water_edge[:, 5])))
+    tmp_oshot = np.sum(est_water_edge[:, 2]) / (np.sum(est_water_edge[:, 2]) + np.sum(est_water_edge[:, 3]))
+    tmp_ushot = np.sum(est_water_edge[:, 3]) / (np.sum(est_water_edge[:, 2]) + np.sum(est_water_edge[:, 3]))
 
     wedge_line = '%d px (%0.1f)' + Fore.LIGHTRED_EX + '(+%.01f%%, ' + Fore.LIGHTYELLOW_EX + '-%.01f%%)' + Fore.WHITE
-    wedge_line = wedge_line % (tmp_edge, tmp_we_percentage, tmp_oshot, tmp_ushot)
+    wedge_line = wedge_line % (tmp_edge, tmp_we_percentage * 100, tmp_oshot * 100, tmp_ushot * 100)
 
+    tmp_tp_all = np.sum(det_sequences[:, 0])
+    tmp_tp_dz = np.sum(det_sequences_danger[:, 0])
     tp_line = Fore.LIGHTGREEN_EX + '%d (%d)' + Fore.WHITE
-    tp_line = tp_line % (np.sum(det_sequences[:, 0]), np.sum(det_sequences_danger[:, 0]))
+    tp_line = tp_line % (tmp_tp_all, tmp_tp_dz)
 
+    tmp_fp_all = np.sum(det_sequences[:, 1])
+    tmp_fp_dz = np.sum(det_sequences_danger[:, 1])
     fp_line = Fore.LIGHTYELLOW_EX + '%d (%d)' + Fore.WHITE
-    fp_line = fp_line % (np.sum(det_sequences[:, 1]), np.sum(det_sequences_danger[:, 1]))
+    fp_line = fp_line % (tmp_fp_all, tmp_fp_dz)
 
+    tmp_fn_all = np.sum(det_sequences[:, 2])
+    tmp_fn_dz = np.sum(det_sequences_danger[:, 2])
     fn_line = Fore.LIGHTRED_EX + '%d (%d)' + Fore.WHITE
-    fn_line = fn_line % (np.sum(det_sequences[:, 2]), np.sum(det_sequences_danger[:, 2]))
+    fn_line = fn_line % (tmp_fn_all, tmp_fn_dz)
 
     f1_score = (2 * np.sum(det_sequences[:, 0])) / (2 * np.sum(det_sequences[:, 0]) + np.sum(det_sequences[:, 1]) +
-                                                    np.sum(det_sequences[:, 2])) * 100
+                                                    np.sum(det_sequences[:, 2]))
     f1_score_d = (2 * np.sum(det_sequences_danger[:, 0])) / (2 * np.sum(det_sequences_danger[:, 0]) +
                                                              np.sum(det_sequences_danger[:, 1]) +
-                                                             np.sum(det_sequences_danger[:, 2])) * 100
+                                                             np.sum(det_sequences_danger[:, 2]))
 
-    f1_line = '%.01f%% (%.01f%%)' % (np.mean(f1_score), np.mean(f1_score_d))
+    f1_line = '%.01f%% (%.01f%%)' % (f1_score * 100, f1_score_d * 100)
 
     table.field_names = ['Water-edge RMSE', 'TPs', 'FPs', 'FNs', 'F1']
     table.add_row([wedge_line, tp_line, fp_line, fn_line, f1_line])
+
+    export_data = {
+        'water-edge':{
+            'error': tmp_edge,
+            'oshot': tmp_oshot,
+            'ushot': tmp_ushot,
+            'robustness': tmp_we_percentage
+        },
+        'obstacles': {
+            'overall': {
+                'TP': tmp_tp_all,
+                'FP': tmp_fp_all,
+                'FN': tmp_fn_all,
+                'F1': f1_score
+            },
+            'danger-zone': {
+                'TP': tmp_tp_dz,
+                'FP': tmp_fp_dz,
+                'FN': tmp_fn_dz,
+                'F1': f1_score_d
+            }
+        }
+    }
+
+    with open(os.path.join(cfg.PATHS.RESULTS, 'results_%s_summary.json' % args.method), 'w') as f:
+        json.dump(export_data, f)
 
     print(table.get_string(title="Results for method %s on %d sequence/s" % (args.method, num_sequences)))
 
