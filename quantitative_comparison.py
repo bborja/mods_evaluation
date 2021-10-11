@@ -10,22 +10,18 @@ from matplotlib.projections.polar import PolarAxes
 from matplotlib.projections import register_projection
 from matplotlib.spines import Spine
 from matplotlib.transforms import Affine2D
+from configs import get_cfg
 
 import matplotlib
 matplotlib.rcParams['pdf.fonttype'] = 42
-matplotlib.rcParams['ps.fonttype'] = 42
-
-RESULTS_PATH = './results'
-NUM_SEQUENCES = 94
+matplotlib.rcParams['ps.fonttype']  = 42
 
 
 def get_arguments():
     """ Parse all the arguments provided from the CLI
     Returns: A list of parsed arguments
     """
-    parser = argparse.ArgumentParser(description='Marine Obstacle Detection Benchmark.')
-    parser.add_argument("--results-path", type=str, default=RESULTS_PATH,
-                        help="Absolute path to the folder where evaluation results are stored.")
+    parser = argparse.ArgumentParser(description='MODS - A USV-oriented obstacle segmentation benchmark')
     parser.add_argument("--methods", type=str, nargs='+', required=True,
                         help="<Required> First method name. This should be equal to the folder name in which the "
                              "segmentation masks are located.")
@@ -35,6 +31,7 @@ def get_arguments():
 
 def main():
     args = get_arguments()
+    cfg = get_cfg(args)
 
     # Get number of methods
     num_methods = len(args.methods)
@@ -44,25 +41,25 @@ def main():
 
     # Initialize array of size (num_methods x 8) for storing detections of each method
     # obstacle TP, obstacle FP, obstacle FN, danger TP, danger FP, danger FN, land TP, land FN
-    total_detections = np.zeros((num_methods, 8))
+    total_detections              = np.zeros((num_methods, 8))
     total_detections_per_sequence = np.zeros((num_methods, 8))
 
     # Initialize array of size (num_methods x 94) for storing water-edge rmse of each method and each sequence
-    water_edges = np.zeros((num_methods, NUM_SEQUENCES))
+    water_edges = np.zeros((num_methods, cfg.DATASET.NUM_SEQUENCES))
     
     method_names = []
 
     # Detection rates (per sequence)
-    detection_rates = np.zeros((num_methods, 6))
-    f1_per_sequence = np.zeros((num_methods, NUM_SEQUENCES))
+    detection_rates = np.zeros((num_methods, N))
+    f1_per_sequence = np.zeros((num_methods, cfg.DATASET.NUM_SEQUENCES))
 
     # Loop through the methods...
     for i in range(num_methods):
         # Get and append results
         # Load results
-        with open(os.path.join(args.results_path, 'results_%s.json' % args.methods[i])) as f:
+        with open(os.path.join(cfg.PATHS.RESULTS, 'results_%s.json' % args.methods[i])) as f:
             tmp_results = json.load(f)
-            total_detections, water_edges = get_detection_data(tmp_results, total_detections, water_edges, i)
+            total_detections, water_edges    = get_detection_data(tmp_results, total_detections, water_edges, i)
             detection_rates, f1_per_sequence = get_detection_data_per_sequence(tmp_results, detection_rates,
                                                                                f1_per_sequence, i)
         
@@ -71,7 +68,7 @@ def main():
 
     # Initialize spider-plot
     theta = radar_factory(N, frame='polygon')
-    detection_rates *= 100 / NUM_SEQUENCES
+    detection_rates *= 100 / cfg.DATASET.NUM_SEQUENCES
 
     # Generate detection data statistics
     data = generate_detection_data(total_detections)
@@ -80,7 +77,8 @@ def main():
     spoke_labels = data.pop(0)
 
     # FIGURE 1 - ALL
-    fig, axes = plt.subplots(figsize=(9, 9), nrows=1, ncols=2)
+    fig, axes = plt.subplots(figsize=(15, 6), nrows=1, ncols=2)
+    plt.suptitle("Overall Results")
     axes[0].axis('off')
     axes[1].axis('off')
 
@@ -88,7 +86,7 @@ def main():
 
     colors = ['tab:blue', 'tab:orange', 'tab:purple', 'tab:pink', 'tab:olive']  # Colors for top-five performing methods
 
-    print(data)
+    #print(data)
 
     ax1 = fig.add_subplot(1, 2, 1, projection='radar')
     # Loop through the results of the methods and plot them in spiderplot
@@ -102,23 +100,22 @@ def main():
 
     # Water edge comparison
     ax2 = fig.add_subplot(1, 2, 2, projection='rectilinear')
-    x_axis = np.arange(1, NUM_SEQUENCES+1, 1)
-    ax2.set_xlim(1, NUM_SEQUENCES)
+    plt.title("Water edge comparison")
+    x_axis = np.arange(1, cfg.DATASET.NUM_SEQUENCES+1, 1)
+    ax2.set_xlim(1, cfg.DATASET.NUM_SEQUENCES)
     # ax2.set_xticks(x_axis)
     for d, color in zip(water_edges, colors):
         ax2.plot(x_axis, d, color=color)
 
-    #plt.show()
-
-
     # FIGURE 2 - RESULTS PER SEQUENCE
-    fig2, axes2 = plt.subplots(figsize=(9, 9), nrows=1, ncols=2)
+    fig2, axes2 = plt.subplots(figsize=(15, 6), nrows=1, ncols=2)
+    plt.suptitle("Results per sequence")
     axes2[0].axis('off')
     axes2[1].axis('off')
 
     fig2.subplots_adjust(wspace=0.25, hspace=0.20, top=0.85, bottom=0.05)
 
-    print(detection_rates)
+    #print(detection_rates)
 
     ax21 = fig2.add_subplot(1, 2, 1, projection='radar')
     # Loop through the results of the methods and plot them in spiderplot
@@ -132,7 +129,8 @@ def main():
 
     # Water edge comparison
     ax22 = fig2.add_subplot(2, 2, 2, projection='rectilinear')
-    ax22.set_xlim(1, NUM_SEQUENCES)
+    plt.title("Water edge comparison")
+    ax22.set_xlim(1, cfg.DATASET.NUM_SEQUENCES)
     # ax2.set_xticks(x_axis)
     for d, color in zip(water_edges, colors):
         ax22.plot(x_axis, d, color=color)
@@ -140,7 +138,8 @@ def main():
     # F1 per sequence
     f1_per_sequence *= 100
     ax23 = fig2.add_subplot(2, 2, 4, projection='rectilinear')
-    ax23.set_xlim(1, NUM_SEQUENCES)
+    plt.title("F1 score comparison")
+    ax23.set_xlim(1, cfg.DATASET.NUM_SEQUENCES)
     for d, color in zip(f1_per_sequence, colors):
         ax23.plot(x_axis, d, color=color)
 
@@ -346,3 +345,4 @@ def radar_factory(num_vars, frame='circle'):
 
 if __name__ == '__main__':
     main()
+                     

@@ -6,14 +6,6 @@ import matplotlib.pyplot as plt
 from skimage import measure
 from skimage import draw
 
-# COLOR LABELS in RGB format
-SKY_LABEL = np.array([ 89,  78, 161])  # RGB Label for SKY semantic component
-WAT_LABEL = np.array([ 51, 168, 222])  # RGB Label for WATER semantic component
-OBS_LABEL = np.array([246, 193,  59])  # RGB Label for OBSTACLES semantic component
-OVS_LABEL = np.array([127,  51,   0])  # RGB Label for overshot water estimation
-UNS_LABEL = np.array([127,   0,  55])  # RGB Label for undershot water estimation
-VOD_LABEL = np.array([  0,   0,   0])  # RGB Label for VOID component (placeholder)
-
 
 # Function codes segmentation mask to labels
 # 0 denotes obstacles
@@ -26,19 +18,19 @@ def code_mask_to_labels(segmentation_mask, segmentation_colors):
     new_segmentation_mask = np.zeros((segmentation_mask.shape[0], segmentation_mask.shape[1]))
 
     # Add water labels
-    new_segmentation_mask[(segmentation_mask[:, :, 0] == segmentation_colors[1, 0]) &
-                          (segmentation_mask[:, :, 1] == segmentation_colors[1, 1]) &
-                          (segmentation_mask[:, :, 2] == segmentation_colors[1, 2])] = 1
+    new_segmentation_mask[(segmentation_mask[:, :, 0] == segmentation_colors[1][0]) &
+                          (segmentation_mask[:, :, 1] == segmentation_colors[1][1]) &
+                          (segmentation_mask[:, :, 2] == segmentation_colors[1][2])] = 1
     # Add sky labels
-    new_segmentation_mask[(segmentation_mask[:, :, 0] == segmentation_colors[2, 0]) &
-                          (segmentation_mask[:, :, 1] == segmentation_colors[2, 1]) &
-                          (segmentation_mask[:, :, 2] == segmentation_colors[2, 2])] = 2
+    new_segmentation_mask[(segmentation_mask[:, :, 0] == segmentation_colors[2][0]) &
+                          (segmentation_mask[:, :, 1] == segmentation_colors[2][1]) &
+                          (segmentation_mask[:, :, 2] == segmentation_colors[2][2])] = 2
 
     return new_segmentation_mask
 
 
 # Function converts segmentation mask labels to our default color-coded output
-def code_labels_to_colors(segmentation_mask):
+def code_labels_to_colors(segmentation_mask, cfg):
     # Initialize new color-coded segmentation mask
     segmentation_mask_new = np.zeros((segmentation_mask.shape[0], segmentation_mask.shape[1], 3), np.uint8)
 
@@ -47,25 +39,25 @@ def code_labels_to_colors(segmentation_mask):
     segmentation_mask_new_b = segmentation_mask_new[:, :, 2]
 
     # Fill new segmentation mask with colors
-    segmentation_mask_new_r[segmentation_mask == 0] = OBS_LABEL[0]
-    segmentation_mask_new_g[segmentation_mask == 0] = OBS_LABEL[1]
-    segmentation_mask_new_b[segmentation_mask == 0] = OBS_LABEL[2]
+    segmentation_mask_new_r[segmentation_mask == 0] = cfg.SEGMENTATIONS.OBS_LABEL[0]
+    segmentation_mask_new_g[segmentation_mask == 0] = cfg.SEGMENTATIONS.OBS_LABEL[1]
+    segmentation_mask_new_b[segmentation_mask == 0] = cfg.SEGMENTATIONS.OBS_LABEL[2]
 
-    segmentation_mask_new_r[segmentation_mask == 1] = WAT_LABEL[0]
-    segmentation_mask_new_g[segmentation_mask == 1] = WAT_LABEL[1]
-    segmentation_mask_new_b[segmentation_mask == 1] = WAT_LABEL[2]
+    segmentation_mask_new_r[segmentation_mask == 1] = cfg.SEGMENTATIONS.WAT_LABEL[0]
+    segmentation_mask_new_g[segmentation_mask == 1] = cfg.SEGMENTATIONS.WAT_LABEL[1]
+    segmentation_mask_new_b[segmentation_mask == 1] = cfg.SEGMENTATIONS.WAT_LABEL[2]
 
-    segmentation_mask_new_r[segmentation_mask == 2] = SKY_LABEL[0]
-    segmentation_mask_new_g[segmentation_mask == 2] = SKY_LABEL[1]
-    segmentation_mask_new_b[segmentation_mask == 2] = SKY_LABEL[2]
+    segmentation_mask_new_r[segmentation_mask == 2] = cfg.SEGMENTATIONS.SKY_LABEL[0]
+    segmentation_mask_new_g[segmentation_mask == 2] = cfg.SEGMENTATIONS.SKY_LABEL[1]
+    segmentation_mask_new_b[segmentation_mask == 2] = cfg.SEGMENTATIONS.SKY_LABEL[2]
 
-    segmentation_mask_new_r[segmentation_mask == 3] = OVS_LABEL[0]
-    segmentation_mask_new_g[segmentation_mask == 3] = OVS_LABEL[1]
-    segmentation_mask_new_b[segmentation_mask == 3] = OVS_LABEL[2]
+    segmentation_mask_new_r[segmentation_mask == 3] = cfg.SEGMENTATIONS.OVS_LABEL[0]
+    segmentation_mask_new_g[segmentation_mask == 3] = cfg.SEGMENTATIONS.OVS_LABEL[1]
+    segmentation_mask_new_b[segmentation_mask == 3] = cfg.SEGMENTATIONS.OVS_LABEL[2]
 
-    segmentation_mask_new_r[segmentation_mask == 4] = UNS_LABEL[0]
-    segmentation_mask_new_g[segmentation_mask == 4] = UNS_LABEL[1]
-    segmentation_mask_new_b[segmentation_mask == 4] = UNS_LABEL[2]
+    segmentation_mask_new_r[segmentation_mask == 4] = cfg.SEGMENTATIONS.UNS_LABEL[0]
+    segmentation_mask_new_g[segmentation_mask == 4] = cfg.SEGMENTATIONS.UNS_LABEL[1]
+    segmentation_mask_new_b[segmentation_mask == 4] = cfg.SEGMENTATIONS.UNS_LABEL[2]
 
     segmentation_mask_new[:, :, 0] = segmentation_mask_new_r
     segmentation_mask_new[:, :, 1] = segmentation_mask_new_g

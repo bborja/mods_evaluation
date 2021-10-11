@@ -24,23 +24,26 @@ def plane_from_IMU(roll, pitch, height):
 
 
 # Ganare danger zone binary mask based on estimated ground plane, height of camera and specified danger-range
-def danger_zone_to_mask(roll, pitch, height, rnge, M, D, w, h):
+def danger_zone_to_mask(roll, pitch, height, rnge, M, DC, w, h):
     # roll in pitch (in degrees)
     # height (height of a camera above the water surface - in our case cca 0.7m)
     # M and D are calibration matrix and vector of distortion coefficients, respectively
     mask = np.zeros([h, w], dtype=np.uint8)
 
+    # Margin angle within which we generate points
+    margin_angle = 50
+
     A, B, C, D = plane_from_IMU(roll, pitch, height)
 
     N = 1000
-    r = np.linspace(0, 180, N)
+    r = np.linspace(0 + margin_angle, 180 - margin_angle, N)
     x = np.sin(np.radians(r)) * rnge
     y = np.cos(np.radians(r)) * rnge
     z = np.zeros(N) + (-1 / C)
     z = z * (A * x + B * y + D)
 
     points = np.transpose(np.array([-y, -z, x]))
-    pp, _ = cv2.projectPoints(points, np.identity(3), np.zeros([1, 3]), M, distCoeffs=D)
+    pp, _ = cv2.projectPoints(points, np.identity(3), np.zeros([1, 3]), M, distCoeffs=DC)
 
     poly = []
 

@@ -109,9 +109,18 @@ def check_tp_detections(gt, gt_coverage, obstacle_mask_filtered, danger_zone, ev
 
                 # Check if enough area is covered by an obstacle to be considered a TP detection
                 if p_above_we < 0.8 and gt_area_surface > 250:
-                    correctly_covered_percentage = num_correctly_detected_pixels / (gt_area_surface * expected_coverage)
+                    # The GT semantic mask of the obstacle may not align with the GT bounding-box of the obstacle
+                    # (i.e., obstacle is non-convex and there are a lot of pixels inside the bounding-box annotation
+                    #  that belong to the background).
+                    # In such cases, we treat obstacle as correctly detected, if it covers at least:
+                    #  min_overlap * gt_area_surface * expected_coverage of pixels. However, since segmentation mask
+                    # is not always precise, there might be detected more pixels inside the GT bounding-box than
+                    # gt_area_surface * expected_coverage. In that case, cap the overlap to 1.
+                    correctly_covered_percentage = np.max([num_correctly_detected_pixels / (gt_area_surface *
+                                                                                            expected_coverage), 1])
                 else:
-                    correctly_covered_percentage = num_correctly_detected_pixels / gt_area_surface
+                    correctly_covered_percentage = np.max([num_correctly_detected_pixels / (gt_area_surface *
+                                                                                            expected_coverage), 1])
             else:
                 correctly_covered_percentage = num_correctly_detected_pixels / gt_area_surface
 

@@ -6,30 +6,36 @@ import matplotlib.patches as patches
 from utils import count_number_fps
 
 
-def visualize_single_image(img, segm_mask, results_detection, gt, original_segm_mask=None):
+def visualize_single_image(img, segm_mask, results_detection, gt, original_segm_mask=None, plot_danger_zone=False):
     # Overlay segmentation mask over the actual image
     added_image = cv2.addWeighted(img, 0.7, segm_mask, 0.3, 0.2)
+
     # For video frame generating
     if original_segm_mask is not None:
         # Read QR code
         img_qr = cv2.resize(((cv2.imread('images/qr-code_2.png')) > 180).astype(np.uint8), (200, 200))
+
         # Resize image and mask to fit on top of the screen
         img_scalled = cv2.resize(img, (426, 320))
         msk_scalled = cv2.resize(original_segm_mask, (426, 320), interpolation=cv2.INTER_NEAREST)
         kernel = np.ones((11, 11), np.float32) / 121
+
         # image
         added_image[0:320, 0:426, :] = img_scalled
+
         # segmentation mask
         added_image[0:320, 426:426+426, :] = msk_scalled
+
         # information
         added_image[0:320, -426:-1, :] = (0.8 *
                                           cv2.filter2D(added_image[0:320, -426:-1, :], -1, kernel)).astype(np.uint8)
         added_image[110:310, -210:-10, :] *= img_qr
+
         # black separating line
         added_image[320:322, :] = 0
 
-    #mpl.rcParams['text.color'] = 'white'
     dpi = mpl.rcParams['figure.dpi']
+
     height, width, depth = img.shape
 
     # What size does the figure need to be in inches to fit the image?
@@ -47,8 +53,9 @@ def visualize_single_image(img, segm_mask, results_detection, gt, original_segm_
     ax.imshow(added_image)
 
     # Plot danger zone
-    #ax.plot(gt['danger_zone']['x_axis'], gt['danger_zone']['y_axis'], marker='', color='orange', linewidth=1,
-    #        linestyle='dashed')
+    if plot_danger_zone:
+        ax.plot(gt['danger_zone']['x_axis'], gt['danger_zone']['y_axis'], marker='', color='orange', linewidth=1,
+                linestyle='dashed')
 
     # Plot water-edge danger lines
     num_danger_lines = len(gt['water_edges'])
@@ -70,9 +77,6 @@ def visualize_single_image(img, segm_mask, results_detection, gt, original_segm_
     ax = plot_detection_rectangles(results_detection, 'tp_list', ax, True)  # Plot TPs in danger zone
     ax = plot_detection_rectangles(results_detection, 'fp_list', ax, True)  # Plot FPs in danger zone
     ax = plot_detection_rectangles(results_detection, 'fn_list', ax, True)  # Plot FNs in danger zone
-
-    # if original_segm_mask is None:
-    #     plt.show()
 
     return fig, ax
 
@@ -160,9 +164,6 @@ def visualize_image_for_video(img, segm_mask, segm_mask_overlay, results_detecti
     ax.text(890, 230, "in danger zone: %d" % num_fns_d, fontsize=12)
     ax.text(880, 290, "F1: %.01f%%" % f1_score, fontsize=15)
 
-    ax.text(1100, 110, "MODB Dataset", fontsize=12)
-
-    # fig.savefig('./results/bla.png')
-    # plt.show()
+    ax.text(1100, 110, "MODS Benchmark", fontsize=12)
 
     return fig

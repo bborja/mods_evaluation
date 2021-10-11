@@ -4,171 +4,139 @@ import os
 import sys
 import cv2
 import time
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 from prettytable import PrettyTable
 from colorama import Fore, Back, Style
 from colorama import init
 from datetime import datetime
-from utils import generate_water_mask, generate_obstacle_mask, write_json_file, read_gt_file, resize_image, \
-                  code_mask_to_labels, build_sequences_list, poly2mask, expand_land, build_mapping_dict
-from danger_zone import plane_from_IMU, danger_zone_to_mask
-from detect_wateredge import evaluate_water_edge
-from detect_obstacles import detect_obstacles_modb
+from utils import *
+from core import *
 from scipy.stats import norm
 from skimage import measure
+from pathlib import Path
+
+from configs import get_cfg
 
 from multiprocessing import Pool
 from tqdm.auto import tqdm
-
-# Default paths
-# Path to the MODB dataset
-DATA_PATH = "E:/MODB/raw"
-# Path to the output segmentations
-SEGMENTATION_PATH = "E:/MODB_output"
-# Path to the output evaluation results folder
-OUTPUT_PATH = "./results"
-# Default segmentation colors (RGB format, where first row corresponds to obstacles, second row corresponds to water and
-#   third row corresponds to the sky component
-SEGMENTATION_COLORS = np.array([[  0,   0,   0],
-                                [255,   0,   0],
-                                [  0, 255,   0]])
-# Default minimal overlap between two bounding boxes
-MIN_OVERLAP = 0.5
-# Default area threshold for obstacle detection
-AREA_THRESHOLD = 5 * 5
-# Percentage to expand all regions above the water-edge
-EXPAND_LAND = 0.01
-# Percentage to expand the obstacle
-EXPAND_OBJS = 0.01
 
 
 def get_arguments():
     """ Parse all the arguments provided from the CLI
     Returns: A list of parsed arguments
     """
-    parser = argparse.ArgumentParser(description='Marine Obstacle Detection Benchmark.')
-    parser.add_argument("--data-path", type=str, default=DATA_PATH,
-                        help="Absolute path to the folder where MODB sequences are stored.")
-    parser.add_argument("--segmentation-path", type=str, default=SEGMENTATION_PATH,
-                        help="Absolute path to the output folder where segmentation masks are stored.")
-    parser.add_argument("--output_path", type=str, default=OUTPUT_PATH,
-                        help="Output path where the results and statistics of the evaluation will be stored.")
-    parser.add_argument("--method-name", type=str, required=True,
+    parser = argparse.ArgumentParser(description='MODS - A USV-oriented obstacle segmentation benchmark')
+    parser.add_argument("method", type=str,
                         help="<required> Method name. This should be equal to the folder name in which the "
                              "segmentation masks are located")
     parser.add_argument("--sequences", type=int, nargs='+', required=False,
                         help="List of sequences on which the evaluation procedure is performed. Zero = all.")
-    parser.add_argument("--segmentation-colors", type=int, default=SEGMENTATION_COLORS,
-                        help="Segmentation mask colors corresponding to the three semantic labels. Given as 3x3 array,"
-                             "where the first row corresponds to the obstacles color, the second row corresponds to the"
-                             "water component color and the third row correspond to the sky component color, all"
-                             "written in the RGB format.")
-    parser.add_argument("--min-overlap", type=int, default=MIN_OVERLAP,
-                        help="Minimal overlap between two bounding boxes")
-    parser.add_argument("--area-threshold", type=int, default=AREA_THRESHOLD,
-                        help="Area threshold for obstacle detection and consideration in evaluation.")
-    parser.add_argument("--expand-land", type=int, default=EXPAND_LAND,
-                        help="Percentage to expand all regions above the annotated water-edge.")
-    parser.add_argument("--expand-objs", type=int, default=EXPAND_OBJS,
-                        help="Percentage to expand all object regions when checking for FPs.")
-    parser.add_argument("--workers", type=int, default=8, help="Number of workers.")
+    parser.add_argument("--workers", type=int, default=8,
+                        help="Number of workers for parallel evaluation.")
 
     return parser.parse_args()
 
 
 class SequenceEvaluator:
-    def __init__(self, gt, gt_coverage, args, eval_params, mapping_dict_seq):
-        self.gt = gt
-        self.args = args
-        self.eval_params = eval_params
-        self.mapping_dict_seq = mapping_dict_seq
+    def __init__(self, gt, gt_coverage, cfg, method_name, sequences, mapping_dict_seq):
+        """
+        Initialization of Sequence Evaluator
+        :param gt: (json) ground truth data
+        :param gt_coverage: (json) ground truth obstacle coverage
+        :param cfg: (config) config parameters for the evaluation (read from configs/config.py)
+        :param sequences: (list) list of sequences on which we perform the evaluation
+        :param mapping_dict_seq: (dict) mappings for sequence names
+        """
+
+        # Method name
+        self.method_name = method_name
+
+        # Ground truths
+        self.gt          = gt
         self.gt_coverage = gt_coverage
 
+        # Evaluation configs
+        self.cfg         = cfg
+        self.sequences   = sequences
+
+        # Sequence name mappings
+        self.mapping_dict_seq = mapping_dict_seq
+
     def process_sequence(self, seq_index_counter):
-        args = self.args
-        eval_params = self.eval_params
-        mapping_dict_seq = self.mapping_dict_seq
-        gt = self.gt
-        gt_coverage = self.gt_coverage
+        """
+        Process a single given sequence.
+        Note: Implemented so that it can be done in parallel.
+        :param seq_index_counter: (int) index of a sequence given in the provided sequences list
+        :return:
+        """
 
+        # Get evaluation parameters
+        eval_params = {"min_overlap":    self.cfg.ANALYSIS.MIN_OVERLAP,
+                       "area_threshold": self.cfg.ANALYSIS.AREA_THRESHOLD,
+                       "expand_land":    self.cfg.ANALYSIS.EXPAND_LAND,
+                       "expand_objs":    self.cfg.ANALYSIS.EXPAND_OBJECTS}
 
-        seq_id = args.sequences[seq_index_counter]
+        #gt_coverage = self.gt_coverage
 
-        num_frames = gt['dataset']['sequences'][seq_id - 1]['num_frames']
+        # Get actual ID of a sequence
+        seq_id = self.sequences[seq_index_counter]
 
-        # Get sequence path
-        seq_path = gt['dataset']['sequences'][seq_id - 1]['path']
-        # Strip path and get sequence name
-        seq_name = seq_path.rstrip().split('/')[1]
-        # Get calibration ID
-        calib_id = seq_name.split('-')[0]
-        # Get calibration file name
-        calib_file = 'E:/MODB/calibration-%s.yaml' % calib_id
+        # Get the number of frames in the sequence
+        num_frames = self.gt['dataset']['sequences'][seq_id - 1]['num_frames']
 
-        """ Load camera calibration file """
+        # Get calibration file for the given sequence
+        calib_id   = (self.gt['dataset']['sequences'][seq_id - 1]['path'].rstrip().split('/')[1]).split('-')[0]
+        calib_file = os.path.join(self.cfg.PATHS.DATASET_CALIB, 'calibration-%s.yaml' % calib_id)
+        #calib_file = 'E:/MODB/calibration-%s.yaml' % calib_id
+
         # Read calibration file
         fs = cv2.FileStorage(calib_file, cv2.FILE_STORAGE_READ)
-        M = fs.getNode("M1").mat()  # Extract calibration matrix (M)
-        D = fs.getNode("D1").mat()  # Extract distortion coefficients (D)
+        cM = fs.getNode("M1").mat()  # Extract calibration matrix (M)
+        cD = fs.getNode("D1").mat()  # Extract distortion coefficients (D)
 
-        """ Ignore mask for camera vignette (sequences 1, 2 and 3) """
         # Check if ignore mask is needed
-        if seq_id == 1 or seq_id == 2 or seq_id == 3:
+        if 1 <= seq_id <= 3:
             # Read the ignore mask
-            ignore_mask = cv2.imread(os.path.join(args.data_path, 'mask_seq123.png'), cv2.IMREAD_GRAYSCALE)
+            ignore_mask = cv2.imread(os.path.join(self.cfg.PATHS.DATASET, 'mask_seq123.png'), cv2.IMREAD_GRAYSCALE)
         else:
             ignore_mask = None
 
         # Statistics
-        total_overlap_percentages = []
+        total_overlap_percentages   = []
         total_overlap_percentages_d = []
-        total_detections = np.zeros((6, 1), np.int)  # TP, FP, FN, TP_D, FP_D, FN_D
-        total_edge_approx = []  # RMSE
-        total_over_under = np.zeros(2)  # Overshot, Undershot water-edge number of times when it was not exact)
-        total_land_detections = np.zeros(2)  # TOtal number of TP/FN land detections
+        total_detections            = np.zeros((6, 1), np.int)  # Order: TP, FP, FN, TP_D, FP_D, FN_D
+        total_edge_approx           = []  # RMSE
+        total_over_under            = np.zeros(2)  # Overshot, Undershot water-edge nmb. of times when it was not exact
+        total_land_detections       = np.zeros(2)  # Total number of TP/FN land detections
 
         results = []
 
         # Loop through frames in the sequence
-        for frame_number in range(num_frames):
-            # Update progress bar
-            print_progress_bar(frame_number + 1, num_frames,
-                               prefix='Processing sequence %02d / %02d:' % (seq_index_counter + 1, len(args.sequences)),
-                               suffix='Complete', length=50)
+        for frame_number in tqdm(range(num_frames)):
 
-            img_name = gt['dataset']['sequences'][seq_id - 1]['frames'][frame_number]['image_file_name']
+            # Get image's filename and corresponding horizon's filename
+            img_name       = self.gt['dataset']['sequences'][seq_id - 1]['frames'][frame_number]['image_file_name']
             img_name_split = img_name.split('.')
-            hor_name = '%s.png' % img_name_split[0]
+            hor_name       = '%s.png' % img_name_split[0]
 
             # Perform evaluation on the current image
             rmse, num_land_detections, ou_mask, tp_list, fp_list, fn_list, num_fps, \
             tp_list_d, fp_list_d, fn_list_d, num_fps_d, \
-            overlap_percentages, overlap_percentages_d = run_evaluation_image(args.data_path,
-                                                                              args.segmentation_path,
-                                                                              args.segmentation_colors,
-                                                                              args.method_name,
-                                                                              gt['dataset']['sequences'][seq_id - 1],
-                                                                              gt_coverage['sequences'][seq_id - 1],
+            overlap_percentages, overlap_percentages_d = run_evaluation_image(self.cfg,
+                                                                              self.method_name,
+                                                                              self.gt['dataset']['sequences'][seq_id - 1],
+                                                                              self.gt_coverage['sequences'][seq_id - 1],
                                                                               frame_number, eval_params,
-                                                                              mapping_dict_seq, M, D,
+                                                                              self.mapping_dict_seq, cM, cD,
                                                                               ignore_mask)
 
-            total_overlap_percentages = total_overlap_percentages + overlap_percentages
+            total_overlap_percentages   = total_overlap_percentages   + overlap_percentages
             total_overlap_percentages_d = total_overlap_percentages_d + overlap_percentages_d
 
             num_oshoot_wateredge = np.sum(ou_mask == 1)
             num_ushoot_wateredge = np.sum(ou_mask == 2)
 
-            """
-            if num_oshoot_wateredge + num_ushoot_wateredge > 0:
-                we_o = float(num_oshoot_wateredge / (num_oshoot_wateredge + num_ushoot_wateredge))
-                we_u = float(num_ushoot_wateredge / (num_oshoot_wateredge + num_ushoot_wateredge))
-            else:
-                we_o = 0
-                we_u = 0
-            """
-
-            # Add to the evaluation results
+            # Add current statistics to the evaluation results
             evaluation_results = {"we_rmse": rmse,
                                   "we_o": int(num_oshoot_wateredge),
                                   "we_u": int(num_ushoot_wateredge),
@@ -194,8 +162,8 @@ class SequenceEvaluator:
             total_detections[5] += len(fn_list_d)
 
             total_edge_approx.append(rmse)
-            total_over_under[0] += num_oshoot_wateredge
-            total_over_under[1] += num_ushoot_wateredge
+            total_over_under[0]   += num_oshoot_wateredge
+            total_over_under[1]   += num_ushoot_wateredge
             total_land_detections += num_land_detections
 
         return seq_id, results, total_detections, total_edge_approx, total_over_under, total_land_detections,\
@@ -207,48 +175,46 @@ class SequenceEvaluator:
 def run_evaluation():
     init()  # initialize colorama
     args = get_arguments()
+    cfg  = get_cfg(args)
 
-    # Norm paths...
-    args.data_path = os.path.normpath(args.data_path)
-    args.segmentation_path = os.path.normpath(args.segmentation_path)
-    args.output_path = os.path.normpath(args.output_path)
-    if not os.path.exists(args.output_path):
-        os.mkdir(args.output_path)
+    # Create output path if it does not exists yet
+    Path(os.path.join(cfg.PATHS.RESULTS)).mkdir(parents=True, exist_ok=True)
 
     eval_params = {
-                   "min_overlap": args.min_overlap,
-                   "area_threshold": args.area_threshold,
-                   "expand_land": args.expand_land,
-                   "expand_objs": args.expand_objs
+                   "min_overlap":    cfg.ANALYSIS.MIN_OVERLAP,
+                   "area_threshold": cfg.ANALYSIS.AREA_THRESHOLD,
+                   "expand_land":    cfg.ANALYSIS.EXPAND_LAND,
+                   "expand_objs":    cfg.ANALYSIS.EXPAND_OBJECTS
                   }
 
     # Read ground truth annotations JSON file
-    gt = read_gt_file(os.path.join(args.data_path, 'modb.json'))
-    gt_coverage = read_gt_file(os.path.join(args.data_path, 'dextr_coverage.json'), True)
+    gt          = read_gt_file(os.path.join(os.path.normpath(cfg.PATHS.DATASET), 'modd3.json')) # 5.10.2021 change; Previously: modb.json
+    gt_coverage = read_gt_file(os.path.join(os.path.normpath(cfg.PATHS.DATASET), 'dextr_coverage.json'), True)
 
     # List of sequences on which we will evaluate the method
     if args.sequences is None:
-        args.sequences = np.arange(1, gt['dataset']['num_seq'] + 1)
+        sequences = np.arange(1, cfg.DATASET.NUM_SEQUENCES + 1)
+    else:
+        sequences = args.sequences
 
     # Get current date and time
-    now = datetime.now()
-    date_time = now.strftime("%d/%m/%Y, %H:%M:%S")
+    date_time = datetime.now().strftime("%d/%m/%Y, %H:%M:%S")
 
     # Initialize evaluation results dict
     evaluation_results = {
-                          "method_name": args.method_name,
-                          "date_time": date_time,
-                          "parameters": {
-                                          "min_overlap": "%0.2f" % args.min_overlap,
-                                          "area_threshold": "%d" % args.area_threshold
-                                        },
-                          "sequences": build_sequences_list(gt['dataset']['num_seq']),
+                          "method_name": args.method,
+                          "date_time":   date_time,
+                          "parameters":  {
+                                           "min_overlap": "%0.2f" % cfg.ANALYSIS.MIN_OVERLAP,
+                                           "area_threshold": "%d" % cfg.ANALYSIS.AREA_THRESHOLD
+                                         },
+                          "sequences":   build_sequences_list(cfg.DATASET.NUM_SEQUENCES),
                          }
     
     # Initialize overlap results dict
     overlap_results = {
-                       "method_name": args.method_name,
-                       "date_time": date_time,
+                       "method_name":      args.method,
+                       "date_time":        date_time,
                        "overlap_perc_all": [],
                        "overlap_perc_dng": []
     }
@@ -256,26 +222,33 @@ def run_evaluation():
     # Quick statistics
     # Displaying detection statistics (TP, FP, FN in and out of danger zone) and water-edge statistics
     total_detections = np.zeros((6, 1), np.int)  # TP, FP, FN, TP_D, FP_D, FN_D
-    total_edge_approx = []  # RMSE
-    total_over_under = np.zeros(2)  # Overshot, undershot water-edge (number of times when it was not exact)
+
+    total_edge_approx     = []           # RMSE
+    total_over_under      = np.zeros(2)  # Overshot, undershot water-edge (number of times when it was not exact)
     total_land_detections = np.zeros(2)  # Total number of TP/FN land detections
 
     # Quick statistics that show all overlaps with ground truth
     # This is useful information for selecting the thresholds...
-    total_overlap_percentages = []
+    total_overlap_percentages   = []
     total_overlap_percentages_d = []
 
     # Build name mapping dict for the current sequence
-    mapping_dict_seq = build_mapping_dict(args.data_path)
+    mapping_dict_seq = build_mapping_dict(cfg.PATHS.DATASET)
 
-    evaluator = SequenceEvaluator(gt, gt_coverage, args, eval_params, mapping_dict_seq)
+    # Initialize evaluator
+    evaluator = SequenceEvaluator(gt, gt_coverage, cfg, args.method, sequences, mapping_dict_seq)
 
+    # Create workers
     with Pool(args.workers) as p:
-        eval_generator = p.imap_unordered(evaluator.process_sequence, range(len(args.sequences)))
-        for i, result in tqdm(enumerate(eval_generator), total=len(args.sequences), desc='Processing sequence'):
+        eval_generator = p.imap_unordered(evaluator.process_sequence, range(len(sequences)))
+
+        # Go through sequences
+        for i, result in tqdm(enumerate(eval_generator), total=len(sequences), desc='Processing sequence'):
             seq_id, results, td, tea, tou, tld, top, topd = result
-            evaluation_results['sequences'][seq_id - 1]['frames'] = results
+
+            evaluation_results['sequences'][seq_id - 1]['frames']    = results
             evaluation_results['sequences'][seq_id - 1]['evaluated'] = True
+
             total_detections += td
             total_edge_approx.extend(tea)
             total_over_under += tou
@@ -323,16 +296,16 @@ def run_evaluation():
     table.field_names = ['Water-edge RMSE', 'Water-Land detections', 'TPs', 'FPs', 'FNs', 'F1']
     table.add_row([wedge_line, water_land_detections, tp_line, fp_line, fn_line, f1_line])
 
-    print(table.get_string(title="Results for method %s on %d sequence/s" % (args.method_name, len(args.sequences))))
+    print(table.get_string(title="Results for method %s on %d sequence/s" % (args.method, len(sequences))))
 
     # Write the evaluation results to JSON file
-    write_json_file(args.output_path, args.method_name, evaluation_results)
+    write_json_file(cfg.PATHS.RESULTS, args.method, evaluation_results)
     # Write the overlap results to JSON file
-    write_json_file(args.output_path, '%s_overlap' % args.method_name, overlap_results)
+    write_json_file(cfg.PATHS.RESULTS, '%s_overlap' % args.method, overlap_results)
 
 
 # Run evaluation on a single image
-def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, gt, gt_coverage, frame_number,
+def run_evaluation_image(cfg, method_name, gt, gt_coverage, frame_number,
                          eval_params, mapping_dict_seq, M, D, ignore_mask=None):
     """ Function performs evaluation process on a single image
         * In the evaluation process we evaluate the water-edge accuracy and obstacle detection accuracy
@@ -366,32 +339,43 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
 
     """ Reading all necessary data... """
     # Read image name:
-    img_name = gt['frames'][frame_number]['image_file_name']
+    img_name       = gt['frames'][frame_number]['image_file_name']
     img_name_split = img_name.split('.')
-    seq_path = gt['path']
+    seq_path       = gt['path']
     seq_path_split = seq_path.split('/')
 
     # Look-up name in dict:
     seq_name = mapping_dict_seq[seq_path_split[1]]
     
     # Read image
-    img = cv2.imread(os.path.join(data_path + seq_path, img_name))
+    img = cv2.imread(os.path.join(cfg.PATHS.DATASET + seq_path, img_name))
 
     # Read segmentation mask
-    seg = cv2.imread(os.path.join(segmentation_path, seq_name,
-                                  method_name, "%04d.png" % (frame_number*10)))
+    if cfg.SEGMENTATIONS.SEQ_FIRST:
+        seg = cv2.imread(os.path.join(cfg.PATHS.SEGMENTATIONS, seq_name,
+                                      method_name, "%04d.png" % (frame_number * 10)))
+    else:
+        seg = cv2.imread(os.path.join(cfg.PATHS.SEGMENTATIONS, method_name, seq_name,
+                                      "%04d.png" % (frame_number * 10)))
 
     # Read horizon mask generated with imu
-    horizon_mask = cv2.imread(os.path.join(data_path, seq_path_split[1], 'imus', '%s.png' % img_name_split[0]),
+    horizon_mask = cv2.imread(os.path.join(cfg.PATHS.DATASET, seq_path_split[1], 'imus', '%s.png' % img_name_split[0]),
                               cv2.IMREAD_GRAYSCALE)
 
     """ Generate danger zone... """
-    roll = gt['frames'][frame_number]['roll']  # Get IMU roll
+    roll  = gt['frames'][frame_number]['roll']  # Get IMU roll
     pitch = gt['frames'][frame_number]['pitch']  # Get IMU pitch
-    danger_zone_mask = danger_zone_to_mask(roll, pitch, 0.7, 15, M, D, 1278, 958)  # Generate binary danger-zone mask
+
+    # Generate binary danger-zone masks
+    danger_zone_mask = danger_zone_to_mask(roll, pitch, cfg.DATASET.CAMERA_HEIGHT, cfg.DATASET.DNG_ZONE_RANGE,
+                                           M, D, cfg.DATASET.IMG_WIDTH, cfg.DATASET.IMG_HEIGHT)
 
     # Code mask to labels
-    seg = code_mask_to_labels(seg, seg_colors)
+    try:
+        seg = code_mask_to_labels(seg, cfg.SEGMENTATIONS.INPUT_COLORS)
+    except:
+        raise 'Missing number of something for sequence %s frame %d' % (seq_name, frame_number)
+
     # Resize segmentation mask to match the image
     seg = resize_image(seg, (img.shape[1], img.shape[0]))
 
@@ -472,33 +456,10 @@ def run_evaluation_image(data_path, segmentation_path, seg_colors, method_name, 
                                                                                        exhaustive_annotations,
                                                                                        danger_zone_mask)
 
-    plt.show()
+    #plt.show()
 
     return rmse, num_land_detections, ou_mask, tp_list, fp_list, fn_list, num_fps, tp_list_d, fp_list_d, fn_list_d,\
            num_fps_d, overlap_percentages, overlap_perc_d
-
-
-# Print iterations progress
-def print_progress_bar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█', print_end="\r"):
-    """
-    Call in a loop to create terminal progress bar
-    @params:
-        iteration   - Required  : current iteration (Int)
-        total       - Required  : total iterations (Int)
-        prefix      - Optional  : prefix string (Str)
-        suffix      - Optional  : suffix string (Str)
-        decimals    - Optional  : positive number of decimals in percent complete (Int)
-        length      - Optional  : character length of bar (Int)
-        fill        - Optional  : bar fill character (Str)
-        printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
-    """
-    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
-    filled_length = int(length * iteration // total)
-    bar = fill * filled_length + '-' * (length - filled_length)
-    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end=print_end)
-    # Print New Line on Complete
-    if iteration == total:
-        print()
 
 
 if __name__ == '__main__':
