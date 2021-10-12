@@ -24,8 +24,8 @@ def get_arguments():
     parser = argparse.ArgumentParser(description='Marine Obstacle Detection Benchmark - Evaluation statistics')
     parser.add_argument("method", type=str,
                         help="<Required> Name of the method to be analysed.")
-    #parser.add_argument("--results-path", type=str, default=RESULTS_PATH,
-    #                    help="Absolute path to the folder where the evaluation results are stored.")
+    parser.add_argument("--config-file", type=str, default=None,
+                        help="Config file to use. If not specified, the default config is used.")
 
     return parser.parse_args()
 
@@ -44,7 +44,7 @@ def main():
     # Read results JSON file
     with open(os.path.join(cfg.PATHS.RESULTS, 'results_%s.json' % args.method)) as f:
         results = json.load(f)
-        
+
     # Read overlap results JSON file
     #with open(os.path.join(args.results_path, 'results_%s_overlap.json' % args.method_name)) as f:
     #    overlap_results = json.load(f)
@@ -233,7 +233,7 @@ def main():
 
     overlap_perc_all = overlap_results['overlap_perc_all']
     overlap_perc_dng = overlap_results['overlap_perc_dng']
-    
+
 
     x_d = np.linspace(0, 1, 100)
     kde = KernelDensity(bandwidth=0.05, kernel='gaussian')
@@ -244,11 +244,11 @@ def main():
     logprob_all = kde.score_samples(x_d[:, None])
     max_density_all_ind = np.argmax(np.exp(logprob_all))
     max_density_all_val = np.exp(logprob_all[max_density_all_ind]) + 1
-    
+
     logprob_dng = kde.score_samples(x_d[:, None])
     max_density_dng_ind = np.argmax(np.exp(logprob_dng))
     max_density_dng_val = np.exp(logprob_dng[max_density_dng_ind])
-    
+
     current_overlap_threshold = float(results['parameters']['min_overlap'])
 
     # Plot graph
@@ -260,14 +260,14 @@ def main():
     plt.text(x_d[max_density_all_ind], np.exp(logprob_all[max_density_all_ind]), '%.02f' % x_d[max_density_all_ind])
     plt.plot([current_overlap_threshold, current_overlap_threshold], [-0.2, max_density_all_val], ':r')
     plt.ylim([-0.2, max_density_all_val])
-    
+
     plt.subplot(222)
     tmp_hist_all_y, _, _ = plt.hist(overlap_perc_all, bins=10)
     max_hist_all_y = tmp_hist_all_y.max()
     plt.plot([current_overlap_threshold, current_overlap_threshold], [0, max_hist_all_y], ':r')
     plt.ylim([0, max_hist_all_y])
     plt.xlim([0, 1])
-    
+
     plt.subplot(223)
     plt.fill_between(x_d, np.exp(logprob_dng), alpha=0.5)
     plt.plot(overlap_perc_dng, np.full_like(overlap_perc_dng, -0.1), '|k', markeredgewidth=1)
@@ -275,7 +275,7 @@ def main():
     plt.text(x_d[max_density_dng_ind], np.exp(logprob_dng[max_density_dng_ind]), '%.02f' % x_d[max_density_dng_ind])
     plt.plot([current_overlap_threshold, current_overlap_threshold], [-0.2, max_density_all_val], ':r')
     plt.ylim([-0.2, max_density_all_val])
-    
+
     plt.subplot(224)
     plt.hist(overlap_perc_dng, bins=10)
     plt.plot([current_overlap_threshold, current_overlap_threshold], [0, max_hist_all_y], ':r')
@@ -307,9 +307,9 @@ def main():
     fn_line = Fore.LIGHTRED_EX + '%d (%d)' + Fore.WHITE
     fn_line = fn_line % (np.sum(det_sequences[:, 2]), np.sum(det_sequences_danger[:, 2]))
 
-    f1_score = (2 * np.sum(det_sequences[:, 0])) / (2 * np.sum(det_sequences[:, 0]) + np.sum(det_sequences[:, 1]) + 
+    f1_score = (2 * np.sum(det_sequences[:, 0])) / (2 * np.sum(det_sequences[:, 0]) + np.sum(det_sequences[:, 1]) +
                                                     np.sum(det_sequences[:, 2])) * 100
-    f1_score_d = (2 * np.sum(det_sequences_danger[:, 0])) / (2 * np.sum(det_sequences_danger[:, 0]) + 
+    f1_score_d = (2 * np.sum(det_sequences_danger[:, 0])) / (2 * np.sum(det_sequences_danger[:, 0]) +
                                                              np.sum(det_sequences_danger[:, 1]) +
                                                              np.sum(det_sequences_danger[:, 2])) * 100
 
@@ -399,7 +399,7 @@ def main():
     print(table_ratios.get_string(title="Rations between detections within danger zone and all screen"))
 
     #print(det_sizes_danger)
-    
+
     plt.show()
 
 

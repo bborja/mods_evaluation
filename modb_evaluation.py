@@ -33,6 +33,8 @@ def get_arguments():
                         help="List of sequences on which the evaluation procedure is performed. Zero = all.")
     parser.add_argument("--workers", type=int, default=8,
                         help="Number of workers for parallel evaluation.")
+    parser.add_argument("--config-file", type=str, default=None,
+                        help="Config file to use in evaluation. If not specified, the default config is used.")
 
     return parser.parse_args()
 
@@ -210,7 +212,7 @@ def run_evaluation():
                                          },
                           "sequences":   build_sequences_list(cfg.DATASET.NUM_SEQUENCES),
                          }
-    
+
     # Initialize overlap results dict
     overlap_results = {
                        "method_name":      args.method,
@@ -272,9 +274,9 @@ def run_evaluation():
 
     wedge_line = '%d px ' + Fore.LIGHTRED_EX + '(+%.01f%%, ' + Fore.LIGHTYELLOW_EX + '-%.01f%%)' + Fore.WHITE
     wedge_line = wedge_line % (tmp_edge, tmp_oshot, tmp_ushot)
-    
+
     if total_land_detections[0] + total_land_detections[1] > 0:
-        water_land_detections = '%.01f%%' % ((total_land_detections[0] / (total_land_detections[0] + 
+        water_land_detections = '%.01f%%' % ((total_land_detections[0] / (total_land_detections[0] +
                                                                           total_land_detections[1])) * 100)
     else:
         water_land_detections = 100
@@ -346,7 +348,7 @@ def run_evaluation_image(cfg, method_name, gt, gt_coverage, frame_number,
 
     # Look-up name in dict:
     seq_name = mapping_dict_seq[seq_path_split[1]]
-    
+
     # Read image
     img = cv2.imread(os.path.join(cfg.PATHS.DATASET + seq_path, img_name))
 
@@ -418,7 +420,7 @@ def run_evaluation_image(cfg, method_name, gt, gt_coverage, frame_number,
     gt_mask = (np.logical_or(land_mask, ou_mask == 2)).astype(np.uint8)
     # Expand the mask left and right by 1% of an image width
     gt_mask = expand_land(gt_mask, eval_params)
-    
+
     # plt.figure(1)
     # plt.subplot(121)
     # plt.imshow(ou_mask)

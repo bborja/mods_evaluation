@@ -64,8 +64,7 @@ _C.VISUALIZATION.FONT_SIZE = 42  # Font size for matplotlib
 
 def get_cfg(args):
     cfg = _C.clone()
-    #if args.config_file:
-    #    cfg.merge_from_file(args.config_file)
-    #cfg.merge_from_list(args.opts)
+    if hasattr(args, 'config_file') and args.config_file is not None:
+       cfg.merge_from_file(args.config_file)
     cfg.freeze()
     return cfg

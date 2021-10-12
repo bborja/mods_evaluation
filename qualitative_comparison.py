@@ -31,6 +31,8 @@ def get_arguments():
                         help="Sequence for visualization.")
     parser.add_argument("--frame", type=int,
                         help="Frame for visualization")
+    parser.add_argument("--config-file", type=str, default=None,
+                        help="Config file to use. If not specified, the default config is used.")
 
     return parser.parse_args()
 
@@ -63,7 +65,7 @@ def main():
         with open(os.path.join(cfg.PATHS.RESULTS, 'results_%s.json' % args.methods[i])) as f:
             tmp_results = json.load(f)
             results_seg.append({tmp_method_name_string: tmp_results})
-            
+
         # Get and append segmentation masks
         tmp_seg_mask = load_segmentation_mask(cfg.PATHS.SEGMENTATIONS, cfg.SEGMENTATIONS.INPUT_COLORS, args.sequence,
                                               args.methods[i], args.frame, img, cfg)
@@ -88,7 +90,7 @@ def main():
         plt.title(args.methods[i])
         ax.imshow(methods_seg_masks[i]['method_%01d' % i])
         ax.axis('off')
-        
+
         # Get number of water edge lines
         num_danger_lines = len(gt['water_edges'])
 

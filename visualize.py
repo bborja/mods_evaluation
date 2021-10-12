@@ -31,6 +31,8 @@ def get_arguments():
                         help="Switch for exporting a video of sequence/s.")
     parser.add_argument("--delete-raw-imgs", type=bool, default=False,
                         help="Delete raw generated images after exporting video.")
+    parser.add_argument("--config-file", type=str, default=None,
+                        help="Config file to use. If not specified, the default config is used.")
 
     return parser.parse_args()
 
@@ -67,7 +69,7 @@ def main():
             # Load image
             img = cv2.imread(os.path.join(data_path + seq_path,
                                           results['sequences'][seq_id-1]['frames'][args.frame-1]['img_name']))
-            
+
             # Load segmentation output
             seg = cv2.imread(os.path.join(segmentation_path, 'seq%02d' % seq_id,
                                           args.method, '%04d.png' % (args.frame * 10)))
@@ -148,14 +150,14 @@ def main():
                                                   'tmp_frames', '%08d.png' % fr_id))
                     else:
                         plt.show()
-                        
+
                     frame_counter += 1
 
             else:
                 raise ValueError('<Error>: Sequence %d was not evaluated' % seq_id)
 
         print('\n')
-        
+
         if args.export_video:
             # Export frames to video
             cmd = ['ffmpeg', '-r', '2', '-i', os.path.join(output_path, args.method,
