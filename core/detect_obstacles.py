@@ -116,11 +116,11 @@ def check_tp_detections(gt, gt_coverage, obstacle_mask_filtered, danger_zone, ev
                     #  min_overlap * gt_area_surface * expected_coverage of pixels. However, since segmentation mask
                     # is not always precise, there might be detected more pixels inside the GT bounding-box than
                     # gt_area_surface * expected_coverage. In that case, cap the overlap to 1.
-                    correctly_covered_percentage = np.max([num_correctly_detected_pixels / (gt_area_surface *
-                                                                                            expected_coverage), 1])
+                    correctly_covered_percentage = np.min([num_correctly_detected_pixels / (gt_area_surface *
+                                                                                            expected_coverage + 1e-9), 1])
                 else:
-                    correctly_covered_percentage = np.max([num_correctly_detected_pixels / (gt_area_surface *
-                                                                                            expected_coverage), 1])
+                    correctly_covered_percentage = np.min([num_correctly_detected_pixels / (gt_area_surface *
+                                                                                            expected_coverage + 1e-9), 1])
             else:
                 correctly_covered_percentage = num_correctly_detected_pixels / gt_area_surface
 
