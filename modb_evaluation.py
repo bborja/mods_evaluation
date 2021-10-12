@@ -17,7 +17,8 @@ from pathlib import Path
 
 from configs import get_cfg
 
-from multiprocessing import Pool
+from utils.utils import TqdmPool
+import utils.context as ctx
 from tqdm.auto import tqdm
 
 
@@ -114,7 +115,7 @@ class SequenceEvaluator:
         results = []
 
         # Loop through frames in the sequence
-        for frame_number in tqdm(range(num_frames)):
+        for frame_number in tqdm(range(num_frames), desc='Seq %s' % seq_id, position=ctx.PID+1, leave=False):
 
             # Get image's filename and corresponding horizon's filename
             img_name       = self.gt['dataset']['sequences'][seq_id - 1]['frames'][frame_number]['image_file_name']
@@ -241,11 +242,11 @@ def run_evaluation():
     evaluator = SequenceEvaluator(gt, gt_coverage, cfg, args.method, sequences, mapping_dict_seq)
 
     # Create workers
-    with Pool(args.workers) as p:
+    with TqdmPool(args.workers) as p:
         eval_generator = p.imap_unordered(evaluator.process_sequence, range(len(sequences)))
 
         # Go through sequences
-        for i, result in tqdm(enumerate(eval_generator), total=len(sequences), desc='Processing sequence'):
+        for i, result in tqdm(enumerate(eval_generator), total=len(sequences), desc='Processing sequences'):
             seq_id, results, td, tea, tou, tld, top, topd = result
 
             evaluation_results['sequences'][seq_id - 1]['frames']    = results

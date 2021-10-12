@@ -6,6 +6,11 @@ import matplotlib.pyplot as plt
 from skimage import measure
 from skimage import draw
 
+from tqdm.auto import tqdm
+from multiprocessing import Queue, Pool, RLock
+from contextlib import contextmanager
+import utils.context as ctx
+
 
 # Function codes segmentation mask to labels
 # 0 denotes obstacles
@@ -74,11 +79,11 @@ def expand_land(gt_mask, eval_params):
     # how many pixels this is based on the width of the image
     amount = np.ceil(eval_params['expand_land'] * gt_mask.shape[1]).astype(np.int)
     # construct kernel
-    
+
     # kernel for only horizontal expansion
     # tmp_kernel = np.zeros((amount * 2 + 1, amount * 2 + 1), dtype=np.uint8)
     # tmp_kernel[amount, :] = 1
-    
+
     # kernel for both horizontal and vertical expansion
     # tmp_kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (amount * 2 + 1, amount * 2 + 1))  # Cross Kernel
     tmp_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (amount * 2 + 1, amount * 2 + 1))  # Ellipse Kernel
@@ -95,7 +100,7 @@ def generate_obstacle_mask(segmentation_mask, gt_obstacles):
     obstacle_mask = np.zeros((segmentation_mask.shape[0], segmentation_mask.shape[1]))
     # Add the obstacle component
     obstacle_mask[segmentation_mask == 0] = 1
-    
+
     # Get number of obstacles
     num_obstacles = len(gt_obstacles)
     # Loop through obstacles and check if some of them is "negative" aka ignore region
@@ -105,7 +110,7 @@ def generate_obstacle_mask(segmentation_mask, gt_obstacles):
             # Paint over this area as a non-obstacle label
             # Extra: Expand box a bit, otherwise some FPs still go through
             obstacle_mask[tmp_bbox[1]-10:np.min([segmentation_mask.shape[0], tmp_bbox[3]+10]), tmp_bbox[0]-10:tmp_bbox[2]+10] = 0
-    
+
     return obstacle_mask
 
 
@@ -273,5 +278,21 @@ def build_mapping_dict(data_path):
     return mapping_dict
 
 
+@contextmanager
+def TqdmPool(processes, initializer=None, initargs=None, *args, **kwargs):
+    """Wrapper of multiprocessing.Pool, suitable for use with tqdm. Workers are numbered in a global variable `PROC_I`."""
 
+    def _init(q,lock,args):
+        # Set process id, tqdm lock
+        ctx.set_pid(q.get())
+        tqdm.set_lock(lock)
 
+        if initializer is not None:
+            initializer(*args)
+
+    q = Queue()
+    for i in range(processes):
+        q.put(i)
+
+    with Pool(processes, initializer=_init, initargs=(q,RLock(),initargs), *args, **kwargs) as p:
+        yield p
