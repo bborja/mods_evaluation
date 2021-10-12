@@ -1,0 +1,11 @@
+# Python
+/venv/
+__pycache__/
+.ipynb_checkpoints/
+*.pyc
+
+# IDEs
+.idea/
+.vscode/
+/shelf/
+/workspace.xml
