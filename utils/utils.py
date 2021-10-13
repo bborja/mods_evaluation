@@ -278,21 +278,21 @@ def build_mapping_dict(data_path):
     return mapping_dict
 
 
+def tqdm_pool_initializer(q,lock,initializer,args):
+    # Set process id, tqdm lock
+    ctx.set_pid(q.get())
+    tqdm.set_lock(lock)
+
+    if initializer is not None:
+        initializer(*args)
+
 @contextmanager
 def TqdmPool(processes, initializer=None, initargs=None, *args, **kwargs):
     """Wrapper of multiprocessing.Pool, suitable for use with tqdm. Workers are numbered in a global variable `PROC_I`."""
-
-    def _init(q,lock,args):
-        # Set process id, tqdm lock
-        ctx.set_pid(q.get())
-        tqdm.set_lock(lock)
-
-        if initializer is not None:
-            initializer(*args)
 
     q = Queue()
     for i in range(processes):
         q.put(i)
 
-    with Pool(processes, initializer=_init, initargs=(q,RLock(),initargs), *args, **kwargs) as p:
+    with Pool(processes, initializer=tqdm_pool_initializer, initargs=(q,RLock(),initializer,initargs), *args, **kwargs) as p:
         yield p
