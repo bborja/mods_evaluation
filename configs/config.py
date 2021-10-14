@@ -7,7 +7,7 @@ _C.DATASET = CN()
 _C.DATASET.NUM_SEQUENCES  = 94    # Number of sequences in the dataset
 _C.DATASET.IMG_WIDTH      = 1278  # Width of images in the dataset
 _C.DATASET.IMG_HEIGHT     = 958   # Height of images in the dataset
-_C.DATASET.CAMERA_HEIGHT  = 0.7   # Height of the camera above the water surface (in meters)
+_C.DATASET.CAMERA_HEIGHT  = 1.0   # Height of the camera above the water surface (in meters)
 _C.DATASET.DNG_ZONE_RANGE = 15    # Danger zone range (in meters)
 
 # All Paths
@@ -60,6 +60,16 @@ _C.ANALYSIS.EXPAND_OBJECTS = 0.01    # Alpha parameter to expand obstacles (from
 # Visualization parameters
 _C.VISUALIZATION = CN()
 _C.VISUALIZATION.FONT_SIZE = 42  # Font size for matplotlib
+
+# IMU-camera-usv calibration offsets (pitch, roll offsets in radians)
+_C.OFFSETS = CN()
+_C.OFFSETS.CAM_IMU_CALIB = [ [-0.073, +0.039],   # seq <=3
+                             [-0.043, +0.039],   # 4 <= seq <= 8
+                             [-0.043, +0.049],   # 9 <= seq <= 22
+                             [-0.063, +0.039],   # 23 <= seq <= 47
+                             [-0.093, +0.039],   # 48 <= seq <= 65
+                             [-0.063, +0.039],   # 66 <= seq <= 67
+                             [-0.063, +0.059] ]  # 68 <= seq
 
 
 def get_cfg(args):

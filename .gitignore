@@ -9,3 +9,7 @@ __pycache__/
 .vscode/
 /shelf/
 /workspace.xml
+
+# Other
+/sanity_checks/
+/results/

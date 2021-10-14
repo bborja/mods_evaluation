@@ -119,8 +119,11 @@ def check_tp_detections(gt, gt_coverage, obstacle_mask_filtered, danger_zone, ev
                     correctly_covered_percentage = np.min([num_correctly_detected_pixels / (gt_area_surface *
                                                                                             expected_coverage + 1e-9), 1])
                 else:
+                    """
                     correctly_covered_percentage = np.min([num_correctly_detected_pixels / (gt_area_surface *
                                                                                             expected_coverage + 1e-9), 1])
+                    """
+                    correctly_covered_percentage = num_correctly_detected_pixels / gt_area_surface
             else:
                 correctly_covered_percentage = num_correctly_detected_pixels / gt_area_surface
 

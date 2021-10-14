@@ -7,7 +7,7 @@ import cv2
 
 
 # Function performs water-edge evaluation
-def evaluate_water_edge(gt, obstacle_mask_labels, horizon_mask, eval_params):
+def evaluate_water_edge(gt, obstacle_mask_labels, horizon_mask):
     # Get height and width of the image
     h, w = obstacle_mask_labels.shape
 

@@ -366,8 +366,10 @@ def run_evaluation_image(cfg, method_name, gt, gt_coverage, frame_number,
                               cv2.IMREAD_GRAYSCALE)
 
     """ Generate danger zone... """
-    roll  = gt['frames'][frame_number]['roll']  # Get IMU roll
-    pitch = gt['frames'][frame_number]['pitch']  # Get IMU pitch
+    # Get pitch, roll calibration offsets
+    offsets_pitch, offsets_roll = get_calibration_offsets(cfg, seq_name)
+    roll  = gt['frames'][frame_number]['roll'] - offsets_roll    # Get IMU roll
+    pitch = gt['frames'][frame_number]['pitch'] - offsets_pitch  # Get IMU pitch
 
     # Generate binary danger-zone masks
     danger_zone_mask = danger_zone_to_mask(roll, pitch, cfg.DATASET.CAMERA_HEIGHT, cfg.DATASET.DNG_ZONE_RANGE,
@@ -414,8 +416,7 @@ def run_evaluation_image(cfg, method_name, gt, gt_coverage, frame_number,
     # Perform the evaluation of the water-edge
     rmse, num_land_detections, ou_mask, land_mask, ignore_abv_strad = evaluate_water_edge(gt['frames'][frame_number],
                                                                                           obstacle_mask_labels,
-                                                                                          horizon_mask,
-                                                                                          eval_params)
+                                                                                          horizon_mask)
 
     # Calculate GT mask (This is land mask with an extension of the undershot regions)
     gt_mask = (np.logical_or(land_mask, ou_mask == 2)).astype(np.uint8)

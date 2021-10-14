@@ -221,6 +221,35 @@ def prepare_gt_obs_annotations(gt):
     return gt
 
 
+# Get usv-camera-imu calibration offsets
+def get_calibration_offsets(cfg, seq_name):
+    seq_id = int(seq_name[-2::])
+
+    if seq_id <= 3:
+        offset_pitch = cfg.OFFSETS.CAM_IMU_CALIB[0][0]
+        offset_roll  = cfg.OFFSETS.CAM_IMU_CALIB[0][1]
+    elif 4 <= seq_id <= 8:
+        offset_pitch = cfg.OFFSETS.CAM_IMU_CALIB[1][0]
+        offset_roll  = cfg.OFFSETS.CAM_IMU_CALIB[1][1]
+    elif 9 <= seq_id <= 22:
+        offset_pitch = cfg.OFFSETS.CAM_IMU_CALIB[2][0]
+        offset_roll  = cfg.OFFSETS.CAM_IMU_CALIB[2][1]
+    elif 23 <= seq_id <= 47:
+        offset_pitch = cfg.OFFSETS.CAM_IMU_CALIB[3][0]
+        offset_roll  = cfg.OFFSETS.CAM_IMU_CALIB[3][1]
+    elif 48 <= seq_id <= 65:
+        offset_pitch = cfg.OFFSETS.CAM_IMU_CALIB[4][0]
+        offset_roll  = cfg.OFFSETS.CAM_IMU_CALIB[4][1]
+    elif 66 <= seq_id <= 67:
+        offset_pitch = cfg.OFFSETS.CAM_IMU_CALIB[5][0]
+        offset_roll  = cfg.OFFSETS.CAM_IMU_CALIB[5][1]
+    else:
+        offset_pitch = cfg.OFFSETS.CAM_IMU_CALIB[6][0]
+        offset_roll  = cfg.OFFSETS.CAM_IMU_CALIB[6][1]
+
+    return np.rad2deg(offset_pitch), np.rad2deg(offset_roll)
+
+
 # Calculate root mean of squared errors provided in the list
 def calculate_root_mean(elements_list):
     if elements_list.size != 0:
