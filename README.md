@@ -66,7 +66,7 @@ The accuracy of the water-edge estimation is reported in pixels and calculated b
  
 The script can be run by executing the following example command:
 ```
-$ python visualize.py wasr
+$ python modb_evaluation.py wasr
 ```
 
 Which produces the output:
