@@ -11,5 +11,6 @@ __pycache__/
 /workspace.xml
 
 # Other
+run_experiments.sh
 /sanity_checks/
 /results/

@@ -32,7 +32,7 @@ def get_arguments():
                              "segmentation masks are located")
     parser.add_argument("--sequences", type=int, nargs='+', required=False,
                         help="List of sequences on which the evaluation procedure is performed. Zero = all.")
-    parser.add_argument("--workers", type=int, default=8,
+    parser.add_argument("--workers", type=int, default=4,
                         help="Number of workers for parallel evaluation.")
     parser.add_argument("--config-file", type=str, default=None,
                         help="Config file to use in evaluation. If not specified, the default config is used.")

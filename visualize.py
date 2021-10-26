@@ -56,7 +56,7 @@ def main():
         Path(os.path.join(output_path, args.method)).mkdir(parents=True, exist_ok=True)
 
     # Read GT json
-    gt = read_gt_file(os.path.join(data_path, 'modb.json'))
+    gt = read_gt_file(os.path.join(data_path, 'modd3.json'))  # previously: modb.json
 
     if args.frame is not None and isinstance(args.frame, int):
         if args.sequences is not None and len(args.sequences) == 1:

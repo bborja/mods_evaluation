@@ -345,4 +345,3 @@ def radar_factory(num_vars, frame='circle'):
 
 if __name__ == '__main__':
     main()
-                     
