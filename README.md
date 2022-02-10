@@ -1,6 +1,11 @@
 # Marine Obstacle Detection Benchmark
-[1] Bovcon Borja and Muhovič Jon et. al, MODS -- A USV-oriented object detection and obstacle segmentation benchmark<br>
-Published in: IEEE Transactions on Intelligent Transportation Systems, 2021
+[1] Bovcon Borja, Muhovič Jon, Vranac Duško, Mozetič Dean, Perš Janez and Kristan Matej,<br>
+<i>"MODS -- A USV-oriented object detection and obstacle segmentation benchmark"</i><br>
+Published in: IEEE Transactions on Intelligent Transportation Systems, 2021<br>
+
+<a href="https://arxiv.org/abs/2105.02359">Read paper on arXiv</a><br>
+
+Download full dataset from <a href="https://vision.fe.uni-lj.si/public/modd3/">here</a>.
 
 Updates:<br>
 * [October 2021] Released <i>Marine Obstacle Segmentation Benchmark</i> evaluation scripts and dataset
@@ -149,6 +154,6 @@ generates videos for each sequence (in mp4 format) where in each frame obstacles
 
 
 ## 4. References
-[1] Bovcon and Muhovič et. al,MODS -- A USV-oriented object detection and obstacle segmentation benchmark, T-ITS 2021<br>
+[1] Bovcon, Muhovič, Vranac, Mozetič, Perš and Kristan, MODS -- A USV-oriented object detection and obstacle segmentation benchmark, T-ITS 2021<br>
 [2] Bovcon et. al, Stereo Obstacle Detection for Unmanned Surface Vehicles by IMU-assisted Semantic Segmentation, RAS 2018<br>
 [3] Bovcon et. al, The MaSTr1325 Dataset for Training Deep USV Obstacle Detection Models, IROS 2019
