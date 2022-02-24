@@ -290,12 +290,12 @@ def main():
     table_ratios = PrettyTable()
 
     #tmp_edge = np.ceil(np.mean(est_water_edge[:, 1]))
-    tmp_edge = np.ceil(np.sum(est_water_edge[:, 0]) / num_frames_total)
+    tmp_edge = np.sum(est_water_edge[:, 0]) / num_frames_total
     tmp_we_percentage = (np.sum(est_water_edge[:, 4]) / (np.sum(est_water_edge[:, 4]) + np.sum(est_water_edge[:, 5])))
     tmp_oshot = np.sum(est_water_edge[:, 2]) / (np.sum(est_water_edge[:, 2]) + np.sum(est_water_edge[:, 3]))
     tmp_ushot = np.sum(est_water_edge[:, 3]) / (np.sum(est_water_edge[:, 2]) + np.sum(est_water_edge[:, 3]))
 
-    wedge_line = '%d px (%0.1f)' + Fore.LIGHTRED_EX + '(+%.01f%%, ' + Fore.LIGHTYELLOW_EX + '-%.01f%%)' + Fore.WHITE
+    wedge_line = '%.1f px (%0.1f)' + Fore.LIGHTRED_EX + '(+%.01f%%, ' + Fore.LIGHTYELLOW_EX + '-%.01f%%)' + Fore.WHITE
     wedge_line = wedge_line % (tmp_edge, tmp_we_percentage * 100, tmp_oshot * 100, tmp_ushot * 100)
 
     tmp_tp_all = np.sum(det_sequences[:, 0])
