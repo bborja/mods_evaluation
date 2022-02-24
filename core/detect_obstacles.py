@@ -79,9 +79,9 @@ def check_tp_detections(gt, gt_coverage, obstacle_mask_filtered, danger_zone, ev
         if gt_area_surface >= eval_params['area_threshold'] and gt['obstacles'][i]['type'] != 'negative':
             # Get current GT obstacle bounding-box
             if isinstance(gt['obstacles'][i]['bbox'], list):
-                tmp_gt_obs = (np.array(gt['obstacles'][i]['bbox']).astype(np.int))
+                tmp_gt_obs = (np.array(gt['obstacles'][i]['bbox']).astype(int))
             else:
-                tmp_gt_obs = (gt['obstacles'][i]['bbox']).astype(np.int)
+                tmp_gt_obs = (gt['obstacles'][i]['bbox']).astype(int)
 
             # Extract bounding-box region from the filtered obstacle mask
             obstacle_mask_area = obstacle_mask_filtered[tmp_gt_obs[1]:tmp_gt_obs[3], tmp_gt_obs[0]:tmp_gt_obs[2]]

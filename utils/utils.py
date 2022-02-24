@@ -77,7 +77,7 @@ def code_labels_to_colors(segmentation_mask, cfg):
 # Function expands regions above the ground-truth water-edge
 def expand_land(gt_mask, eval_params):
     # how many pixels this is based on the width of the image
-    amount = np.ceil(eval_params['expand_land'] * gt_mask.shape[1]).astype(np.int)
+    amount = np.ceil(eval_params['expand_land'] * gt_mask.shape[1]).astype(int)
     # construct kernel
 
     # kernel for only horizontal expansion
@@ -206,7 +206,7 @@ def prepare_gt_obs_annotations(gt):
         for fr in range(num_frames):
             num_obstacles = len(gt['dataset']['sequences'][cur_seq]['frames'][fr]['obstacles'])
             for i in range(num_obstacles):
-                tmp_bb = np.array(np.round(gt['dataset']['sequences'][cur_seq]['frames'][fr]['obstacles'][i]['bbox'])).astype(np.int)
+                tmp_bb = np.array(np.round(gt['dataset']['sequences'][cur_seq]['frames'][fr]['obstacles'][i]['bbox'])).astype(int)
                 tmp_bb[2] += tmp_bb[0]  # Change width to right-most point of a bounding-box
                 tmp_bb[3] += tmp_bb[1]  # Change height to bottom-most point of a bounding-box
                 gt['dataset']['sequences'][cur_seq]['frames'][fr]['obstacles'][i]['bbox'] = tmp_bb  # Update annotations

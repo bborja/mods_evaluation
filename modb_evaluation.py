@@ -107,7 +107,7 @@ class SequenceEvaluator:
         # Statistics
         total_overlap_percentages   = []
         total_overlap_percentages_d = []
-        total_detections            = np.zeros((6, 1), np.int)  # Order: TP, FP, FN, TP_D, FP_D, FN_D
+        total_detections            = np.zeros((6, 1), int)  # Order: TP, FP, FN, TP_D, FP_D, FN_D
         total_edge_approx           = []  # RMSE
         total_over_under            = np.zeros(2)  # Overshot, Undershot water-edge nmb. of times when it was not exact
         total_land_detections       = np.zeros(2)  # Total number of TP/FN land detections
@@ -224,7 +224,7 @@ def run_evaluation():
 
     # Quick statistics
     # Displaying detection statistics (TP, FP, FN in and out of danger zone) and water-edge statistics
-    total_detections = np.zeros((6, 1), np.int)  # TP, FP, FN, TP_D, FP_D, FN_D
+    total_detections = np.zeros((6, 1), int)  # TP, FP, FN, TP_D, FP_D, FN_D
 
     total_edge_approx     = []           # RMSE
     total_over_under      = np.zeros(2)  # Overshot, undershot water-edge (number of times when it was not exact)

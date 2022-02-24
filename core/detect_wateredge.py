@@ -31,9 +31,9 @@ def evaluate_water_edge(gt, obstacle_mask_labels, horizon_mask):
 
             # Add generated land mask of the current danger line to the total land mask...
             land_mask = (np.logical_or(land_mask, tmp_mask)).astype(np.uint8)
-            
+
     land_mask_orig = np.copy(land_mask)
-    
+
     # Mask for obstacles under the water-edge
     obstacles_under_edge_mask = np.zeros(land_mask.shape, dtype=np.uint8)
 
@@ -43,7 +43,7 @@ def evaluate_water_edge(gt, obstacle_mask_labels, horizon_mask):
         # Get current obstacle annotation
         tmp_obstacle = gt['obstacles'][i]['bbox']
         tmp_obstacle_patch = land_mask[tmp_obstacle[1]:tmp_obstacle[3], tmp_obstacle[0]:tmp_obstacle[2]]
-        
+
         # Build ground truth obstacle mask
         obstacles_under_edge_mask[tmp_obstacle[1]:tmp_obstacle[3], tmp_obstacle[0]:tmp_obstacle[2]] = 1
 
@@ -53,7 +53,7 @@ def evaluate_water_edge(gt, obstacle_mask_labels, horizon_mask):
             # Remove such part from the evaluation of the water-edge
             land_mask[0:h, tmp_obstacle[0]:tmp_obstacle[2]] = 0
             filtered_areas[0:h, tmp_obstacle[0]:tmp_obstacle[2]] = 0
-            
+
             # !!!!!!!!!!!!!!!!!!!!!!
             # THIS IS TO ADDRESS PARTS WHERE THE WATER-EDGE WAS NOT EVALUATED
             # Add such part to the land_mask_orig, to not generate false-positives mid annotations...
@@ -84,14 +84,14 @@ def evaluate_water_edge(gt, obstacle_mask_labels, horizon_mask):
     # Create obstacle map
     obstacle_mask_labels = obstacle_mask_labels * filtered_areas
     lower_bounds_obstacle_mask = np.zeros((h, w))
-    
+
     # Process obstacle mask
     for x in range(w):
         seen_labels = []
         for y in range(h-1):
             current_label = obstacle_mask_labels[y, x]
             next_label = obstacle_mask_labels[y+1, x]
-            
+
             # If we are entering new label
             if next_label != current_label:
                 # Check if this is first entry
@@ -100,10 +100,10 @@ def evaluate_water_edge(gt, obstacle_mask_labels, horizon_mask):
                 # When we are exiting the entered label
                 else:
                     lower_bounds_obstacle_mask[y+1, x] = 1
-                # If we are exiting obstacle    
+                # If we are exiting obstacle
                 if next_label == 0:
                     lower_bounds_obstacle_mask[y, x] = 1
-                    
+
         # Find first non-zero element in the water mask. This is where the water-edge is located.
         idx_gt = np.argmax(1 - land_mask[:, x])
 
@@ -131,7 +131,7 @@ def evaluate_water_edge(gt, obstacle_mask_labels, horizon_mask):
                     if obstacle_mask_labels[idx_det, x] == 1 or idx_det == 1:
                         overunder_mask[idx_det:idx_gt, x] = 1
                         break
-            
+
     #plt.figure(2)
     #plt.clf()
     #plt.subplot(121)
@@ -151,18 +151,18 @@ def evaluate_water_edge(gt, obstacle_mask_labels, horizon_mask):
            (isinstance(gt['water_edges'][we]['x_axis'], np.ndarray) and gt['water_edges'][we]['x_axis'].size > 1):
             cur_danger_line_x = np.array(gt['water_edges'][we]['x_axis'])
             # Get the beginning of the danger line (x-axis)
-            cur_danger_line_x_min = np.max([np.min(np.round(cur_danger_line_x)), 0]).astype(np.int)
+            cur_danger_line_x_min = np.max([np.min(np.round(cur_danger_line_x)), 0]).astype(int)
             # Get the end of the danger line (x-axis)
-            cur_danger_line_x_max = np.min([np.max(np.round(cur_danger_line_x)), w]).astype(np.int)
-            
+            cur_danger_line_x_max = np.min([np.max(np.round(cur_danger_line_x)), w]).astype(int)
+
             # Initialize the counter of correctly/incorrectly detected pixels of the danger line
             tmp_land_detections = [0] * 2
             # Loop through all the pixels between the start and end of the danger line
             for pix in range(cur_danger_line_x_min, cur_danger_line_x_max):
-                
+
                 # Get y value of the ground truth annotation at the current position 'pix'
                 idx_gt = np.argmax(1 - land_mask[:, pix])
-        
+
                 # If y value exists
                 #   Note: such y value might not exist in land mask since we slice out the parts where boats and other
                 #         larger obstacles protrude through the water-edge annotation
@@ -171,7 +171,7 @@ def evaluate_water_edge(gt, obstacle_mask_labels, horizon_mask):
                     tmp_x_coord = pix
                     # y-coordinate of the ground truth water edge
                     tmp_y_coord = idx_gt
-        
+
                     # Check in the DT mask how far the nearest lower-bound of obstacle annotation is located
                     tmp_error = dtf_detected_water_edge[tmp_y_coord, tmp_x_coord]
                     # If such location is further is than 40 pixels, then we treat this as incorrect detection
@@ -192,7 +192,7 @@ def evaluate_water_edge(gt, obstacle_mask_labels, horizon_mask):
 
             """
             # We compute whether the current water-edge was correctly detected or not based on the ratio of the
-            # correctly/incorrectly detected pixels from its edge and prescribed threshold 
+            # correctly/incorrectly detected pixels from its edge and prescribed threshold
             if tmp_land_detections[0] + tmp_land_detections[1] > 0 and \
                 tmp_land_detections[0] / (tmp_land_detections[0] + tmp_land_detections[1]) > eval_params['min_overlap']:
                 # If such ratio excedes the threshold, then this water-edge was correctly detected
@@ -201,13 +201,13 @@ def evaluate_water_edge(gt, obstacle_mask_labels, horizon_mask):
                 # Otherwise this water-edge was incorrectly detected
                 num_land_detections[1] += 1
             """
-            
+
     # Compute the average of RMSE errors for the current frame
     if len(rmse) == 0:
         rmse = 0
     else:
         rmse = np.mean(rmse)
-    
+
     # plt.figure(2)
     # plt.clf()
     # plt.subplot(131)
@@ -240,7 +240,7 @@ def evaluate_water_edge_old(gt, water_mask, eval_params):
             tmp_mask = poly2mask(np.concatenate(([0], tmp_danger_line_y, [0]), axis=0),
                                  np.concatenate(([tmp_danger_line_x[0]], tmp_danger_line_x, [tmp_danger_line_x[-1]]), axis=0),
                                  (water_mask.shape[0], water_mask.shape[1]))
-    
+
             # Add generated land mask of the current danger line to the total land mask...
             land_mask = (np.logical_or(land_mask, tmp_mask)).astype(np.uint8)
 
