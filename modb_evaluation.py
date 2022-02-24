@@ -114,8 +114,12 @@ class SequenceEvaluator:
 
         results = []
 
+        frames_it = range(num_frames)
+        if self.cfg.VISUALIZATION.SEQUENCE_PROGRESS:
+            frames_it = tqdm(frames_it, desc='Seq %s' % seq_id, position=ctx.PID+1, leave=False)
+
         # Loop through frames in the sequence
-        for frame_number in tqdm(range(num_frames), desc='Seq %s' % seq_id, position=ctx.PID+1, leave=False):
+        for frame_number in frames_it:
 
             # Get image's filename and corresponding horizon's filename
             img_name       = self.gt['dataset']['sequences'][seq_id - 1]['frames'][frame_number]['image_file_name']

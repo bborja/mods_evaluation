@@ -18,3 +18,7 @@ SEGMENTATIONS:
     - [247, 195,  37] # Obstacle
     - [ 41, 167, 224] # Water
     - [ 90,  75, 164] # Sky
+
+VISUALIZATION:
+  # Display per-sequence evaluation progress
+  SEQUENCE_PROGRESS: True

@@ -60,6 +60,7 @@ _C.ANALYSIS.EXPAND_OBJECTS = 0.01    # Alpha parameter to expand obstacles (from
 # Visualization parameters
 _C.VISUALIZATION = CN()
 _C.VISUALIZATION.FONT_SIZE = 42  # Font size for matplotlib
+_C.VISUALIZATION.SEQUENCE_PROGRESS = True # Display per-sequence evaluation progress
 
 # IMU-camera-usv calibration offsets (pitch, roll offsets in radians)
 _C.OFFSETS = CN()
