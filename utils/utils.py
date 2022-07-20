@@ -299,7 +299,7 @@ def count_number_fps(fp_list):
 def build_mapping_dict(data_path):
     mapping_dict = {}
     # Read data
-    f = open(os.path.join(data_path, 'sequence_mapping_new.txt'), "r")
+    f = open(os.path.join(data_path, 'sequence_mapping.txt'), "r")
     for x in f:
         y = x.rstrip().split(' ')
         mapping_dict.update({y[0]: y[1]})

@@ -86,8 +86,6 @@ def main():
 
     colors = ['tab:blue', 'tab:orange', 'tab:purple', 'tab:pink', 'tab:olive']  # Colors for top-five performing methods
 
-    #print(data)
-
     ax1 = fig.add_subplot(1, 2, 1, projection='radar')
     # Loop through the results of the methods and plot them in spiderplot
     for d, color in zip(data[0][1], colors):
@@ -114,8 +112,6 @@ def main():
     axes2[1].axis('off')
 
     fig2.subplots_adjust(wspace=0.25, hspace=0.20, top=0.85, bottom=0.05)
-
-    #print(detection_rates)
 
     ax21 = fig2.add_subplot(1, 2, 1, projection='radar')
     # Loop through the results of the methods and plot them in spiderplot

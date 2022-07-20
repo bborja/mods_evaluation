@@ -5,9 +5,11 @@ Published in: IEEE Transactions on Intelligent Transportation Systems, 2021<br>
 
 <a href="https://arxiv.org/abs/2105.02359">Read paper on arXiv</a><br>
 
-Download full dataset from <a href="https://vision.fe.uni-lj.si/public/modd3/">here</a>.
+Download full dataset from <a href="https://vision.fe.uni-lj.si/public/mods/">here</a>.
+WaSR example prediction masks are available <a href="https://drive.google.com/file/d/11q5Fi-iJg_ddS-dTUDV9eKIlgw1G7Km9/view?usp=sharing">here</a>.
 
 Updates:<br>
+* [July 2022] Benchmark clean-up
 * [October 2021] Released <i>Marine Obstacle Segmentation Benchmark</i> evaluation scripts and dataset
 
 
@@ -27,8 +29,35 @@ $ sudo apt-get update
 $ sudo apt-get install python3.6
 $ sudo apt-get install python-opencv
 $ sudo apt-get install ffmpeg
-$ pip install -r requirements.txt
 ```
+
+## 1.1 Running the benchmark (WaSR example)
+
+1. Download and extract MODS dataset dataset
+2. Download and extract WaSR prediction masks
+3. Edit paths in `configs/mods.yaml`
+4. Run evaluation with `python modb_evaluation.py wasr_augm0_plainmaster4 --config-file configs/mods.yaml`
+5. Get in-depth statistics with `python get_evaluation_statistics.py wasr_augm0_plainmaster4 --config-file configs/mods.yaml`
+6. Generate visualizations with `python visualize.py wasr_augm0_plainmaster4 --config-file configs/mods.yaml --output-path ./results`
+
+## 1.2 Running the benchmark on own data
+
+1. The predictions should be stored in the following folder structure:
+```
+method_name
+├── kope100-00006790-00007090
+│   ├── 00006790L.png
+│   └── 00006800L.png
+│   └── ...
+├── ...
+├── stru02-00118250-00118800
+│   ├── 00118250L.png
+│   ├── 00118260L.png
+```
+
+2. Edit paths in `configs/mods.yaml` and colors of semantic labels to match those in prediction masks
+3. Follow steps from Section 1.1, but replace `wasr_augm0_plainmaster4` with own method name
+
 
 ## 2. Evaluation Scripts
 Deep segmentation approaches determine to which of the three semantic components (water, sky, obstacles) a certain pixel in the image belongs to. From the segmented image a navigable surface is extracted and an obstacle map estimated. To evaluate the accuracy of the estimated navigable surface and the corresponding obstacle map, Bovcon et. al, [3] proposed performance evaluation measures that reflect two distinct challenges which USVs face: (i) <i>the water-edge detection</i> and (ii) <i>the obstacle detection</i>.
@@ -71,7 +100,7 @@ The accuracy of the water-edge estimation is reported in pixels and calculated b
  
 The script can be run by executing the following example command:
 ```
-$ python modb_evaluation.py wasr
+$ python modb_evaluation.py wasr_augm0_plainmaster4 --config-file configs/mods.yaml
 ```
 
 Which produces the output:
@@ -123,7 +152,7 @@ The scripts shows evaluation statistics graphicaly. The first row of the figure 
 
 To generate the evaluation statistics we run the command:
 ```
-$ python get_evaluation_statistics.py wasr
+$ python get_evaluation_statistics.py wasr_augm0_plainmaster4 --config-file configs/mods.yaml
 ```
 
 which outputs the following figure, where statistics are generated only for the first sequence:
@@ -146,7 +175,7 @@ This script visualizes the performance of the evaluated segmentation method and 
 #### Description and Examples
 Running the following command
 ```
-$ python visualize.py wasr ./results/
+$ python visualize.py wasr_augm0_plainmaster4 --config-file configs/mods.yaml --output-path ./results
 ```
 generates videos for each sequence (in mp4 format) where in each frame obstacles, water-edge and segmentation mask are marked. An example frame from the video with all the markings looks like: 
 

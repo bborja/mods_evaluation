@@ -70,12 +70,6 @@ def check_tp_detections(gt, gt_coverage, obstacle_mask_filtered, danger_zone, ev
         # gt_area_surface = compute_surface_area(gt['obstacles'][i]['bbox'])
         gt_area_surface = gt['obstacles'][i]['area']
 
-        # Sanity check (dextr coverage):
-        #if gt['obstacles'][i]['id'] == gt_coverage['obstacles'][i]['id']:
-        #    print('all good in the hood')
-        #else:
-        #    print('there are many soci-economic problems in the hood')
-
         if gt_area_surface >= eval_params['area_threshold'] and gt['obstacles'][i]['type'] != 'negative':
             # Get current GT obstacle bounding-box
             if isinstance(gt['obstacles'][i]['bbox'], list):

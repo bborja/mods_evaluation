@@ -13,8 +13,6 @@ from sklearn.neighbors import KernelDensity
 from configs import get_cfg
 
 import matplotlib
-#matplotlib.rcParams['pdf.fonttype'] = 42
-#matplotlib.rcParams['ps.fonttype']  = 42
 
 
 def get_arguments():
@@ -373,7 +371,10 @@ def main():
         if tmp > 0:
             fp_rate[i, 1] = 100 * det_sizes_danger[i+1, 1] / (det_sizes_danger[i+1, 0] + det_sizes_danger[i+1, 1])
 
-        ratios[i, 0] = 100 * (det_sizes_danger[i+1, 0] + det_sizes_danger[i+1, 2]) / (det_sizes[i+1, 0] + det_sizes[i+1, 2])
+        # This is simply the ratio between the number of obstacles within the danger vs the whole screen
+        #ratios[i, 0] = 100 * (det_sizes_danger[i+1, 0] + det_sizes_danger[i+1, 2]) / (det_sizes[i+1, 0] + det_sizes[i+1, 2])
+        # This is ratio between correcly detected percentage of obstacles within the danger zone vs the whole screen
+        ratios[i, 0] = tp_rate[i, 1] / tp_rate[i, 0]
         ratios[i, 1] = 100 * (det_sizes_danger[i+1, 1]) / (det_sizes[i+1, 1])
 
     # Detection sizes numbers

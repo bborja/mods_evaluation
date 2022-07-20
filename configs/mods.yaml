@@ -1,0 +1,24 @@
+PATHS:
+  # Results output folder
+  RESULTS: '../../../Documents/mods_wasr'
+  # Path to where the dataset is stored
+  DATASET: '../../../Documents/mods_dataset'
+  # Path to where calibration files are stored
+  DATASET_CALIB: '../../../Documents/mods_dataset/calibration'
+  # Path to where the segmentation predictions are stored
+  SEGMENTATIONS: '../../../Documents/mods_wasr'
+
+SEGMENTATIONS:
+  # Prediciton dir structure:
+  #  - False: pred_dir/method/sequence/frame.png
+  #  - True:  pred_dir/sequence/method/frame.png
+  SEQ_FIRST: False
+  # Specify which colors are used in segmentation maps
+  INPUT_COLORS: 
+    - [0, 0, 0]    #[247, 195,  37] # Obstacle
+    - [255, 0, 0]  #[ 41, 167, 224] # Water
+    - [0, 255, 0]  #[ 90,  75, 164] # Sky
+
+VISUALIZATION:
+  # Display per-sequence evaluation progress
+  SEQUENCE_PROGRESS: True

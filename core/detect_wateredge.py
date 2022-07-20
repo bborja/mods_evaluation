@@ -132,14 +132,6 @@ def evaluate_water_edge(gt, obstacle_mask_labels, horizon_mask):
                         overunder_mask[idx_det:idx_gt, x] = 1
                         break
 
-    #plt.figure(2)
-    #plt.clf()
-    #plt.subplot(121)
-    #plt.imshow(land_mask)
-    #plt.subplot(122)
-    #plt.imshow(obstacles_under_edge_mask)
-    #plt.show()
-
     dtf_detected_water_edge = scipy.ndimage.morphology.distance_transform_edt(np.logical_not(lower_bounds_obstacle_mask))
 
     num_land_detections = [0] * 2
@@ -207,16 +199,6 @@ def evaluate_water_edge(gt, obstacle_mask_labels, horizon_mask):
         rmse = 0
     else:
         rmse = np.mean(rmse)
-
-    # plt.figure(2)
-    # plt.clf()
-    # plt.subplot(131)
-    # plt.imshow(obstacle_mask_labels)
-    # plt.subplot(132)
-    # plt.imshow(lower_bounds_obstacle_mask)
-    # plt.subplot(133)
-    # plt.imshow(dtf_detected_water_edge)
-    # plt.show()
 
     return rmse, num_land_detections, overunder_mask, land_mask_orig, ignore_above_straddled_obstacles
 
@@ -294,16 +276,6 @@ def evaluate_water_edge_old(gt, water_mask, eval_params):
                     rmse_u = np.array([(idx_gt - idx_det)**2])
                 else:
                     rmse_u = np.row_stack((rmse_u, (idx_gt - idx_det)**2))
-    """
-    plt.figure()
-    plt.subplot(131)
-    plt.imshow(land_mask)
-    plt.subplot(132)
-    plt.imshow(water_mask)
-    plt.subplot(133)
-    plt.imshow(overunder_mask)
-    plt.show()
-    """
 
     # Calculate root mean of square errors for the total water-edge
     return calculate_root_mean(rmse_w), calculate_root_mean(rmse_o), calculate_root_mean(rmse_u), overunder_mask,\

@@ -4,7 +4,6 @@ import os
 import sys
 import cv2
 import time
-#import matplotlib.pyplot as plt
 from prettytable import PrettyTable
 from colorama import Fore, Back, Style
 from colorama import init
@@ -13,7 +12,6 @@ from utils import *
 from core import *
 from scipy.stats import norm
 from skimage import measure
-from pathlib import Path
 
 from configs import get_cfg
 
@@ -79,8 +77,6 @@ class SequenceEvaluator:
                        "expand_land":    self.cfg.ANALYSIS.EXPAND_LAND,
                        "expand_objs":    self.cfg.ANALYSIS.EXPAND_OBJECTS}
 
-        #gt_coverage = self.gt_coverage
-
         # Get actual ID of a sequence
         seq_id = self.sequences[seq_index_counter]
 
@@ -90,7 +86,6 @@ class SequenceEvaluator:
         # Get calibration file for the given sequence
         calib_id   = (self.gt['dataset']['sequences'][seq_id - 1]['path'].rstrip().split('/')[1]).split('-')[0]
         calib_file = os.path.join(self.cfg.PATHS.DATASET_CALIB, 'calibration-%s.yaml' % calib_id)
-        #calib_file = 'E:/MODB/calibration-%s.yaml' % calib_id
 
         # Read calibration file
         fs = cv2.FileStorage(calib_file, cv2.FILE_STORAGE_READ)
@@ -98,11 +93,9 @@ class SequenceEvaluator:
         cD = fs.getNode("D1").mat()  # Extract distortion coefficients (D)
 
         # Check if ignore mask is needed
-        if 1 <= seq_id <= 3:
-            # Read the ignore mask
-            ignore_mask = cv2.imread(os.path.join(self.cfg.PATHS.DATASET, 'mask_seq123.png'), cv2.IMREAD_GRAYSCALE)
-        else:
-            ignore_mask = None
+        ignore_mask = cv2.imread(os.path.join(self.cfg.PATHS.DATASET,
+                                              self.gt['dataset']['sequences'][seq_id - 1]['path'],
+                                              'ignore_mask.png'), cv2.IMREAD_UNCHANGED)
 
         # Statistics
         total_overlap_percentages   = []
@@ -185,7 +178,7 @@ def run_evaluation():
     cfg  = get_cfg(args)
 
     # Create output path if it does not exists yet
-    Path(os.path.join(cfg.PATHS.RESULTS)).mkdir(parents=True, exist_ok=True)
+    os.makedirs(os.path.join(cfg.PATHS.RESULTS), exist_ok=True)
 
     eval_params = {
                    "min_overlap":    cfg.ANALYSIS.MIN_OVERLAP,
@@ -195,8 +188,8 @@ def run_evaluation():
                   }
 
     # Read ground truth annotations JSON file
-    gt          = read_gt_file(os.path.join(os.path.normpath(cfg.PATHS.DATASET), 'modd3.json')) # 5.10.2021 change; Previously: modb.json
-    gt_coverage = read_gt_file(os.path.join(os.path.normpath(cfg.PATHS.DATASET), 'dextr_coverage.json'), True)
+    gt          = read_gt_file(os.path.join(cfg.PATHS.DATASET, 'mods.json'))
+    gt_coverage = read_gt_file(os.path.join(cfg.PATHS.DATASET, 'dextr_coverage.json'), True)
 
     # List of sequences on which we will evaluate the method
     if args.sequences is None:
@@ -240,7 +233,7 @@ def run_evaluation():
     total_overlap_percentages_d = []
 
     # Build name mapping dict for the current sequence
-    mapping_dict_seq = build_mapping_dict(cfg.PATHS.DATASET)
+    mapping_dict_seq = build_mapping_dict('gt_data/')
 
     # Initialize evaluator
     evaluator = SequenceEvaluator(gt, gt_coverage, cfg, args.method, sequences, mapping_dict_seq)
@@ -265,9 +258,6 @@ def run_evaluation():
 
     overlap_results['overlap_perc_all'] = total_overlap_percentages
     overlap_results['overlap_perc_dng'] = total_overlap_percentages_d
-
-    # Print quick statistics
-    table = PrettyTable()
 
     tmp_edge = np.ceil(np.mean(total_edge_approx))
     if np.sum(total_over_under) > 0:
@@ -295,15 +285,40 @@ def run_evaluation():
     fn_line = Fore.LIGHTRED_EX + '%d (%d)' + Fore.WHITE
     fn_line = fn_line % (total_detections[2], total_detections[5])
 
+    pr_line = '%.01f%% (%.01f%%)'
+    pr_line = pr_line % (total_detections[0] / (total_detections[0] + total_detections[1]) * 100,
+                         total_detections[3] / (total_detections[3] + total_detections[4]) * 100)
+
+    re_line = '%.01f%% (%.01f%%)'
+    re_line = re_line % (total_detections[0] / (total_detections[0] + total_detections[2]) * 100,
+                         total_detections[3] / (total_detections[3] + total_detections[5]) * 100)
+
+    frames = 80828
+    tpr_line = Fore.LIGHTGREEN_EX + '%.01f (%.01f)' + Fore.WHITE
+    tpr_line = tpr_line % (total_detections[0] / frames * 100,
+                           total_detections[3] / frames * 100)
+
+    fpr_line = Fore.LIGHTYELLOW_EX + '%.01f (%.01f)' + Fore.WHITE
+    fpr_line = fpr_line % (total_detections[1] / frames * 100,
+                           total_detections[4] / frames * 100)
+
     f1_line = '%.01f%% (%.01f%%)' % ((((2 * total_detections[0]) / (2 * total_detections[0] + total_detections[1] +
                                                                     total_detections[2])) * 100),
                                      (((2 * total_detections[3]) / (2 * total_detections[3] + total_detections[4] +
                                                                     total_detections[5])) * 100))
 
-    table.field_names = ['Water-edge RMSE', 'Water-Land detections', 'TPs', 'FPs', 'FNs', 'F1']
-    table.add_row([wedge_line, water_land_detections, tp_line, fp_line, fn_line, f1_line])
+    # Print quick statistics
+    table_old = PrettyTable()
+    table_new = PrettyTable()
 
-    print(table.get_string(title="Results for method %s on %d sequence/s" % (args.method, len(sequences))))
+    table_old.field_names = ['Water-edge RMSE', 'Water-Land detections', 'TPs', 'FPs', 'FNs', 'F1']
+    table_new.field_names = ['Water-edge RMSE', 'Water-Land detections', 'Pr', 'Re', 'TPr', 'FPr', 'F1']
+
+    table_old.add_row([wedge_line, water_land_detections, tp_line, fp_line, fn_line, f1_line])
+    table_new.add_row([wedge_line, water_land_detections, pr_line, re_line, tpr_line, fpr_line, f1_line])
+
+    print(table_old.get_string(title="Results for method %s on %d sequence/s" % (args.method, len(sequences))))
+    print(table_new.get_string(title="Results for method %s on %d sequence/s" % (args.method, len(sequences))))
 
     # Write the evaluation results to JSON file
     write_json_file(cfg.PATHS.RESULTS, args.method, evaluation_results)
@@ -346,27 +361,30 @@ def run_evaluation_image(cfg, method_name, gt, gt_coverage, frame_number,
 
     """ Reading all necessary data... """
     # Read image name:
-    img_name       = gt['frames'][frame_number]['image_file_name']
+    img_name = gt['frames'][frame_number]['image_file_name']
     img_name_split = img_name.split('.')
-    seq_path       = gt['path']
+    seq_path = gt['path'][1:]
     seq_path_split = seq_path.split('/')
 
     # Look-up name in dict:
-    seq_name = mapping_dict_seq[seq_path_split[1]]
+    seq_name = mapping_dict_seq[seq_path_split[0]]
 
     # Read image
-    img = cv2.imread(os.path.join(cfg.PATHS.DATASET + seq_path, img_name))
+    img = cv2.imread(os.path.join(cfg.PATHS.DATASET, "sequences", seq_path, img_name))
 
     # Read segmentation mask
     if cfg.SEGMENTATIONS.SEQ_FIRST:
-        seg = cv2.imread(os.path.join(cfg.PATHS.SEGMENTATIONS, seq_name,
-                                      method_name, "%04d.png" % (frame_number * 10)))
+        seg = cv2.imread(os.path.join(cfg.PATHS.SEGMENTATIONS, seq_path_split[0],
+                                      method_name, '{}.png'.format(img_name_split[0])))
     else:
-        seg = cv2.imread(os.path.join(cfg.PATHS.SEGMENTATIONS, method_name, seq_name,
-                                      "%04d.png" % (frame_number * 10)))
+        seg = cv2.imread(os.path.join(cfg.PATHS.SEGMENTATIONS, method_name, seq_path_split[0],
+                                      '{}.png'.format(img_name_split[0])))
 
     # Read horizon mask generated with imu
-    horizon_mask = cv2.imread(os.path.join(cfg.PATHS.DATASET, seq_path_split[1], 'imus', '%s.png' % img_name_split[0]),
+    horizon_mask = cv2.imread(os.path.join(cfg.PATHS.DATASET,
+                                           "sequences",
+                                           seq_path_split[0],
+                                           'imus', '{}.png'.format(img_name_split[0])),
                               cv2.IMREAD_GRAYSCALE)
 
     """ Generate danger zone... """
@@ -383,7 +401,7 @@ def run_evaluation_image(cfg, method_name, gt, gt_coverage, frame_number,
     try:
         seg = code_mask_to_labels(seg, cfg.SEGMENTATIONS.INPUT_COLORS)
     except:
-        raise 'Missing number of something for sequence %s frame %d' % (seq_name, frame_number)
+        raise 'Missing number of something for sequence %s frame %d' % (seq_path_split[0], frame_number)
 
     # Resize segmentation mask to match the image
     seg = resize_image(seg, (img.shape[1], img.shape[0]))
@@ -391,7 +409,7 @@ def run_evaluation_image(cfg, method_name, gt, gt_coverage, frame_number,
     """ Perform the evaluation """
     # Generate obstacle mask
     obstacle_mask = generate_obstacle_mask(seg, gt['frames'][frame_number]['obstacles'])
-    # Check if ignore_mask is set (this should be set only for sequences 1, 2 and 3)
+    # Check if ignore_mask is set (this should be set only for the kope100-* sequences)
     if ignore_mask is not None:
         # Remove all detections that occur in the ignore area
         obstacle_mask = np.logical_and(obstacle_mask, np.logical_not(ignore_mask))
@@ -427,25 +445,6 @@ def run_evaluation_image(cfg, method_name, gt, gt_coverage, frame_number,
     # Expand the mask left and right by 1% of an image width
     gt_mask = expand_land(gt_mask, eval_params)
 
-    # plt.figure(1)
-    # plt.subplot(121)
-    # plt.imshow(ou_mask)
-    # plt.subplot(122)
-    # plt.imshow(gt_mask)
-    # plt.show()
-
-    """
-    plt.figure(1)
-    plt.subplot(221)
-    plt.imshow(obstacle_mask)
-    plt.subplot(222)
-    plt.imshow(obstacle_mask_danger)
-    plt.subplot(223)
-    plt.imshow(gt_mask)
-    plt.subplot(224)
-    plt.imshow(gt_mask_danger)
-    """
-
     # Read flag if the sequence is exhaustively annotated (aka if all obstacles in the sequence are annotated)
     if gt['exhaustive'] == 1 and gt['frames'][frame_number]['exhaustive'] == 1:
         exhaustive_annotations = True
@@ -463,8 +462,6 @@ def run_evaluation_image(cfg, method_name, gt, gt_coverage, frame_number,
                                                                                        horizon_mask, eval_params,
                                                                                        exhaustive_annotations,
                                                                                        danger_zone_mask)
-
-    #plt.show()
 
     return rmse, num_land_detections, ou_mask, tp_list, fp_list, fn_list, num_fps, tp_list_d, fp_list_d, fn_list_d,\
            num_fps_d, overlap_percentages, overlap_perc_d
