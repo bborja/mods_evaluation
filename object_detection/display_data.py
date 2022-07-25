@@ -79,12 +79,30 @@ def mask_from_sea_edge(sea_edge, size):
 		axx = e['x_axis']
 		axy = e['y_axis']
 		if axx and axy and isinstance(axx, list) and isinstance(axy, list):
+			# this works for simple edges
 			axx.insert(0, int(axx[0]))
 			axy.insert(0, 0)
 			axx.append(int(axx[-1]))
 			axy.append(0)
 			c = np.array([[int(x),int(y)] for x,y in zip(axx,axy)])
+			# print(c,c.shape, c.dtype)
 			cv2.fillPoly(mask, pts=[c], color=(255,255,255))
+
+			# for i, (x,y) in enumerate(zip(axx[:-1],axy[:-1])):
+			# 	print(i)
+			# 	print(x,y)
+
+			# 	x = int(x)
+			# 	y = int(y)
+
+			# 	x_ = int(axx[i+1])
+			# 	y_ = int(axy[i+1])
+			# 	print(x_,y_)
+
+			# 	c = np.array([[x,x_,x_,x],[y,y_,0.0,0]],dtype=int).T
+			# 	print(c,c.shape,c.dtype)
+			# 	cv2.fillPoly(mask, pts=[c], color=(255,255,255))
+
 	return mask
 	
 def plane_from_IMU(roll, pitch, height):
@@ -92,8 +110,8 @@ def plane_from_IMU(roll, pitch, height):
 	# roll, pitch are in degrees
 
 	# invert the signs
-	pitch = -pitch
-	roll = -roll
+	# pitch = -pitch
+	# roll = -roll
 
 	c,s = np.cos(np.radians(roll)), np.sin(np.radians(roll))
 	Rx = np.array([[1,0,0],[0,c,-s],[0,s,c]])
@@ -109,7 +127,7 @@ def plane_from_IMU(roll, pitch, height):
 
 	return B
 
-def get_danger_zone(im, roll, pitch, height, rnge, M, D):
+def get_danger_zone(im, roll, pitch, height, rnge, M, DC):
 	# get the projection of a circle with radius range onto the sea surface (the surface being estimated from IMU)
 	A,B,C,D = plane_from_IMU(roll,pitch, height)
 	# print(A,B,C,D)
@@ -136,7 +154,7 @@ def get_danger_zone(im, roll, pitch, height, rnge, M, D):
 
 	# points = np.transpose(np.array([-y,-z, x]))
 	points = np.transpose(pts)
-	pp, _ = cv2.projectPoints(points, np.identity(3), np.zeros([1,3]), M, distCoeffs=D)
+	pp, _ = cv2.projectPoints(points, np.identity(3), np.zeros([1,3]), M, distCoeffs=DC)
 
 	for p in pp:
 		x = int(p[0,0])
@@ -148,13 +166,16 @@ def get_danger_zone(im, roll, pitch, height, rnge, M, D):
 
 	return im
 
-def danger_zone_to_mask(roll, pitch, height, rnge, M, D, w, h):
+def danger_zone_to_mask(roll, pitch, height, rnge, M, DC, w, h):
 	mask = np.zeros([h,w],dtype=np.uint8)
 
 	A,B,C,D = plane_from_IMU(roll, pitch, height)
 
 	N = 1000
-	r = np.linspace(0,180,N)
+	# N = 100
+	# r = np.linspace(0,180,N)
+	margin = 50
+	r = np.linspace(margin,180-margin,N)
 	x = np.sin(np.radians(r))*rnge
 	y = np.cos(np.radians(r))*rnge
 	# z = np.zeros(N)-height
@@ -162,14 +183,24 @@ def danger_zone_to_mask(roll, pitch, height, rnge, M, D, w, h):
 	z = z*(A*x+B*y+D)
 
 	points = np.transpose(np.array([-y,-z, x]))
-	pp, _ = cv2.projectPoints(points, np.identity(3), np.zeros([1,3]), M, distCoeffs=D)
+	pp, _ = cv2.projectPoints(points, np.identity(3), np.zeros([1,3]), M, distCoeffs=DC)
+
+	
+	# pp = np.reshape(pp, (pp.shape[0], -1 ,2))
+	pp = np.squeeze(pp)
+	
+	# print(pp)
+	# pp = pp[pp[:, 1].argsort()]
+
+	# print(pp)
 	
 	poly = []
 	
-	for p in pp:
-		x = p[0,0]
-		y = p[0,1]
+	for p, p_ in zip(points,pp):
+		x = p_[0]
+		y = p_[1]
 		if x>0 and y>0 and x <= w and y <= h:
+		# if x>-100 and y>-100 and x <= w+100 and y <= h+100:
 			poly.append([int(x),int(y)])
 			
 	poly.insert(0,[0,poly[0][1]])
@@ -179,6 +210,22 @@ def danger_zone_to_mask(roll, pitch, height, rnge, M, D, w, h):
 	poly.append([0,h])
 			
 	cv2.fillPoly(mask, np.array([poly]), color=255)
+
+	# plt.imshow(mask, cmap='gray')
+
+	# for i,p in enumerate(pp):
+	# 	x = p[0]
+	# 	y = p[1]
+	# 	# if x>0 and y>0 and x <= w and y <= h:
+	# 	if x>-100 and y>-100 and x <= w+100 and y <= h+100:
+	# 	# 	poly.append([int(x),int(y)])
+	# 		plt.plot(x,y,'r*')
+	# 		plt.text(x,y,str(i),color='r')
+
+	# plt.draw()
+	# plt.pause(0.01)
+
+	# plt.show()
 
 	return mask
 
@@ -354,13 +401,16 @@ def main():
 	#res_path = '/home/jon/Desktop/darknet/yolo_res.json'
 	
 	# gt = read_json(args.data_path+'/modd3.json')
-	gt = read_json('/media/jon/disk1/jon/Desktop/viamaro-obstacle-annotator/modd3_fix/modd3.json')
+	gt = read_json('/media/jon/disk1/jon/Desktop/viamaro-obstacle-annotator/modd3_fix/modd3.json') # really ok?
+	# gt = read_json('/media/jon/dusko/modd3/modd3.json') # ok?
+	# gt = read_json('/media/jon/disk1/viamaro_data/modd3_final/modd3.json')
+	gt = read_json('/media/jon/disk1/viamaro_data/modd3_full/modd3.json')
 	gt = gt['dataset']
 	
 	res_data = read_json(res_path)
 	res_data = res_data['dataset']
 	
-	print(len(res_data['sequences']))
+	# print(len(res_data['sequences']))
 		
 	#return
 	
@@ -371,15 +421,18 @@ def main():
 	#if args.sequences is None:
 	#	args.sequences = np.arange(len(seq))
 	sequences = [s['path'] for s in res_data['sequences']]
-	print(sequences)
+	# print(sequences)
 	# return
 
 	disp_ann = True
+	disp_ann = False
 	disp_det = False
 	step = 1
 		
-	seq_id = 5
-	frame_start = 35
+	# seq_id = 33
+	seq_id = 0
+	seq_id = 2
+	frame_start = 0
 	# print(sequences[seq_id])
 	# idx = find_seq_id('/kope104-00074750-00075530/frames/',gt['sequences'])
 	# print(idx)
@@ -411,7 +464,7 @@ def main():
 		
 		for f_gt, f_pred in zip(s['frames'][frame_start::step],s_pred['frames'][frame_start::step]):
 			# get image
-			print(f_pred)
+			# print(f_pred)
 			
 			img_name = f_gt['image_file_name']
 			im_fn = args.data_path+s['path']+img_name
@@ -429,7 +482,7 @@ def main():
 			#if pitch<5:
 			#	continue
 			
-			print("roll: ", roll,"pitch: ", pitch,"yaw: ", yaw)
+			# print("roll: ", roll,"pitch: ", pitch,"yaw: ", yaw)
 
 			plt.clf()
 			# plt.subplot(1,3,1)
@@ -440,7 +493,7 @@ def main():
 				ann = f_gt['obstacles']
 				#print('annotations')
 				for a in ann:
-					print(a)
+					# print(a)
 					bb = a['bbox']	
 					#print(bb)
 					if not in_mask(mask, bb):
@@ -464,7 +517,7 @@ def main():
 					bb = d['bbox']
 
 					#x = int(bb[1]); y = int(bb[0]);	w = int(bb[3]);	h = int(bb[2])
-					print(bb)
+					# print(bb)
 					x = int(bb[0]); y = int(bb[1]);	w = int(bb[2]);	h = int(bb[3])
 					# bb = unrectify_annotations(mapxL, [[x,y,w,h]])[0]
 					# x = int(bb[0]); y = int(bb[1]);	w = int(bb[2]);	h = int(bb[3])
@@ -484,11 +537,21 @@ def main():
 			
 			plt.imshow(img)
 			plt.imshow(mask, alpha=0.3)
+			plt.title(img_name)
+
+			# TODO if necessary, display raw water edge annotations as well
+			# for a in f_gt['water_edges']:
+			# 	print(a)
+			# 	plt.plot(a['x_axis'],a['y_axis'], 'r')
+
 			# plt.subplot(1,3,2)			
 			# dz = danger_zone_to_mask(roll, pitch, 0.5, rnge, M1, D1, w, h)
+			# dz = danger_zone_to_mask(roll, pitch, 0.5, rnge, M1, None, w, h)
+			# dz = danger_zone_to_mask(-pitch, -roll, 0.5, rnge, M1, None, w, h)
+			dz = danger_zone_to_mask(-roll, pitch, 0.5, rnge, M1, None, w, h)
 			# dz = np.copy(img); dz = get_danger_zone(dz, roll, pitch, imu_height, rnge, M1, D1)
 			#(im, roll, pitch, height, rnge, M, D):
-			# plt.imshow(dz)
+			# plt.imshow(dz, alpha=0.5)
 
 			# rnge = 30
 			# plt.subplot(1,3,3)			

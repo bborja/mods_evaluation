@@ -30,7 +30,7 @@ import skimage.io as io
 import random
 
 SEQUENCES = None
-DATA_PATH = '/media/jon/disk1/viamaro_data/modd3_full'
+DATA_PATH = '/media/jon/disk1/viamaro_data/modd3_online'
 clss = ['ship', 'person', 'other']
 
 def get_arguments():
@@ -50,7 +50,8 @@ def get_arguments():
 def build_coco(data_path, results_json, out_fn_gt, out_fn_res, mode='full', ignore_class=False, indices=None):
 	# jointly build COCO GT and COCO detection json files
 	# in order to filter out annotations inside ignore regions
-	GT = read_json(data_path+'/modd3.json')
+	GT = read_json(data_path+'/mods.json')
+	
 	det = read_json(results_json)	
 
 	det = det['dataset']
@@ -92,7 +93,7 @@ def build_coco(data_path, results_json, out_fn_gt, out_fn_res, mode='full', igno
 		M1, M2, D1, D2, R, T = load_calibration(calib_fn)
 
 		for f_gt, f_dt in zip(s_gt['frames'], s_dt['frames']):
-			fn = data_path+s_gt['path']+f_gt['image_file_name']
+			fn = data_path+'/sequences'+s_gt['path']+f_gt['image_file_name']
 			I = Image.open(fn)
 			(width, height)=I.size
 
@@ -114,7 +115,9 @@ def build_coco(data_path, results_json, out_fn_gt, out_fn_res, mode='full', igno
 						mask+= danger_zone_to_mask(f_gt['roll'], f_gt['pitch'], dz_height, dz_range, M1, D1, width, height)		
 
 					if 'mask' in s_gt.keys():
-						mask+= cv2.imread(data_path+'/'+s_gt['mask'], 0)
+						seq_nm = s_gt['path'].split('/')[1]
+						mask_fn = f"{data_path}/sequences/{seq_nm}/ignore_mask.png"
+						mask+= cv2.imread(mask_fn, 0)
 					mask[mask>0]=1
 
 				else:
@@ -132,7 +135,9 @@ def build_coco(data_path, results_json, out_fn_gt, out_fn_res, mode='full', igno
 					mask+= danger_zone_to_mask(f_gt['roll'], f_gt['pitch'], dz_height, dz_range, M1, D1, width, height)		
 
 				if 'mask' in s_gt.keys():
-					mask+= cv2.imread(data_path+'/'+s_gt['mask'], 0)
+					seq_nm = s_gt['path'].split('/')[1]
+					mask_fn = f"{data_path}/sequences/{seq_nm}/ignore_mask.png"
+					mask+= cv2.imread(mask_fn, 0)
 				mask[mask>0]=1
 
 			# setup image data
@@ -285,7 +290,6 @@ def main():
 	print("time elapsed:", time.time()-time1)
 	with open('results.json', 'w') as outfile:
 		outfile.write(to_json(res))
-	
 	
 if __name__ == "__main__":
 	main()
