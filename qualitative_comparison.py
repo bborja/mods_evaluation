@@ -149,8 +149,12 @@ def plot_detection_rectangles(ax, results, list_name, sequence, frame, show_over
 
 def load_segmentation_mask(segmentation_path, segmentation_colors, seq_id, method, frame, img, cfg):
     # Load segmentation output for each method to compare
-    seg = cv2.imread(os.path.join(segmentation_path, 'seq%02d' % seq_id, method,
-                                  '%04d.png' % (frame * 10)))
+    if cfg.SEGMENTATIONS.SEQ_FIRST:
+        seg = cv2.imread(os.path.join(segmentation_path, 'seq%02d', method,
+                                      '%04d.png' % (frame * 10)))
+    else:
+        seg = cv2.imread(os.path.join(segmentation_path, method, 'seq%02d',
+                                      '%04d.png' % (frame * 10)))
 
     # Code mask to labels
     print(seg.shape)
