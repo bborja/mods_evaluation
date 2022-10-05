@@ -93,9 +93,12 @@ class SequenceEvaluator:
         cD = fs.getNode("D1").mat()  # Extract distortion coefficients (D)
 
         # Check if ignore mask is needed
-        ignore_mask = cv2.imread(os.path.join(self.cfg.PATHS.DATASET,
-                                              self.gt['dataset']['sequences'][seq_id - 1]['path'],
-                                              'ignore_mask.png'), cv2.IMREAD_UNCHANGED)
+        seq_path = self.gt['dataset']['sequences'][seq_id - 1]['path'][1:]
+        ignore_mask_path = os.path.join(self.cfg.PATHS.DATASET,
+                                        'sequences', seq_path,
+                                        os.pardir, 'ignore_mask.png')
+        ignore_mask = cv2.imread(ignore_mask_path, cv2.IMREAD_GRAYSCALE)
+
 
         # Statistics
         total_overlap_percentages   = []
@@ -412,7 +415,7 @@ def run_evaluation_image(cfg, method_name, gt, gt_coverage, frame_number,
     # Check if ignore_mask is set (this should be set only for the kope100-* sequences)
     if ignore_mask is not None:
         # Remove all detections that occur in the ignore area
-        obstacle_mask = np.logical_and(obstacle_mask, np.logical_not(ignore_mask))
+        obstacle_mask = np.logical_and(obstacle_mask, np.logical_not(ignore_mask)) * 1.
 
     """ Get connected components of obstacles """
     # Extract connected components from the obstacle mask.
