@@ -404,7 +404,7 @@ def run_evaluation_image(cfg, method_name, gt, gt_coverage, frame_number,
     try:
         seg = code_mask_to_labels(seg, cfg.SEGMENTATIONS.INPUT_COLORS)
     except:
-        raise 'Missing number of something for sequence %s frame %d' % (seq_path_split[0], frame_number)
+        raise RuntimeError('Missing number of something for sequence %s frame %d' % (seq_path_split[0], frame_number))
 
     # Resize segmentation mask to match the image
     seg = resize_image(seg, (img.shape[1], img.shape[0]))
