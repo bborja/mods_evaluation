@@ -5,7 +5,9 @@ Published in: IEEE Transactions on Intelligent Transportation Systems, 2021<br>
 
 <a href="https://arxiv.org/abs/2105.02359">Read paper on arXiv</a><br>
 
-Download full dataset from <a href="https://vision.fe.uni-lj.si/public/mods/">here</a>.
+<!-- Download full dataset from <a href="https://vision.fe.uni-lj.si/public/mods/">here</a>. -->
+Download full dataset from <a href="https://unilj-my.sharepoint.com/:u:/g/personal/jmuhovic_fe1_uni-lj_si/IQBZ7tKnPpt7Q6BCxr4ldolBAdiFFpVOoQGaR0qfpD4Aycs?e=BXkhaI">here</a>.
+
 WaSR example prediction masks are available <a href="https://drive.google.com/file/d/11q5Fi-iJg_ddS-dTUDV9eKIlgw1G7Km9/view?usp=sharing">here</a>.
 
 Updates:<br>
