@@ -192,4 +192,6 @@ generates videos for each sequence (in mp4 format) where in each frame obstacles
 
 ## License
 
+[![Creative Commons Attribution 4.0 International License](https://licensebuttons.net/l/by/4.0/88x31.png)](https://creativecommons.org/licenses/by/4.0/)
+
 Unless otherwise noted, the content of this project is licensed under the [Creative Commons Attribution 4.0 International License (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
