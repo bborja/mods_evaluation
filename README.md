@@ -189,3 +189,7 @@ generates videos for each sequence (in mp4 format) where in each frame obstacles
 [1] Bovcon, Muhovič, Vranac, Mozetič, Perš and Kristan, MODS -- A USV-oriented object detection and obstacle segmentation benchmark, T-ITS 2021<br>
 [2] Bovcon et. al, Stereo Obstacle Detection for Unmanned Surface Vehicles by IMU-assisted Semantic Segmentation, RAS 2018<br>
 [3] Bovcon et. al, The MaSTr1325 Dataset for Training Deep USV Obstacle Detection Models, IROS 2019
+
+## License
+
+Unless otherwise noted, the content of this project is licensed under the [Creative Commons Attribution 4.0 International License (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
